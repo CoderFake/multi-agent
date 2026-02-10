@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCoAgent,
@@ -14,10 +13,27 @@ import { AddResourceDialog } from "./AddResourceDialog";
 import { Resources } from "./Resources";
 import { AgentState, Resource } from "@/lib/types";
 import { useModelSelectorContext } from "@/lib/model-selector-provider";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Pencil, Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function ResearchCanvas() {
+export interface ResearchStateInfo {
+  hasData: boolean;
+  researchQuestion?: string;
+  resourceCount: number;
+  hasReport: boolean;
+}
+
+interface ResearchCanvasProps {
+  /** Callback to notify parent when research state changes (for panel visibility + suggestions) */
+  onStateChange?: (info: ResearchStateInfo) => void;
+}
+
+export function ResearchCanvas({ onStateChange }: ResearchCanvasProps) {
   const { model, agent } = useModelSelectorContext();
 
+  // Single source of truth for agent state - NO other useCoAgent should exist
   const { state, setState } = useCoAgent<AgentState>({
     name: agent,
     initialState: {
@@ -25,6 +41,20 @@ export function ResearchCanvas() {
     },
   });
 
+  // Notify parent about state changes (for panel visibility + chat suggestions)
+  useEffect(() => {
+    const hasData =
+      (state?.resources && state.resources.length > 0) ||
+      (state?.report && state.report.trim().length > 0);
+    onStateChange?.({
+      hasData: !!hasData,
+      researchQuestion: state?.research_question,
+      resourceCount: state?.resources?.length || 0,
+      hasReport: !!(state?.report && state.report.trim().length > 0),
+    });
+  }, [state?.resources, state?.report, state?.research_question, onStateChange]);
+
+  // Render agent progress in CopilotChat (always active since component is always mounted)
   useCoAgentStateRender({
     name: agent,
     render: ({ state, nodeName, status }) => {
@@ -35,6 +65,7 @@ export function ResearchCanvas() {
     },
   });
 
+  // DeleteResources action - always registered since component is always mounted
   useCopilotAction({
     name: "DeleteResources",
     description:
@@ -88,7 +119,6 @@ export function ResearchCanvas() {
     setState({ ...state, resources });
   };
 
-  // const [resources, setResources] = useState<Resource[]>(dummyResources);
   const [newResource, setNewResource] = useState<Resource>({
     url: "",
     title: "",
@@ -115,8 +145,8 @@ export function ResearchCanvas() {
   const [isEditResourceOpen, setIsEditResourceOpen] = useState(false);
 
   const handleCardClick = (resource: Resource) => {
-    setEditResource({ ...resource }); // Ensure a new object is created
-    setOriginalUrl(resource.url); // Store the original URL
+    setEditResource({ ...resource });
+    setOriginalUrl(resource.url);
     setIsEditResourceOpen(true);
   };
 
@@ -136,20 +166,13 @@ export function ResearchCanvas() {
   return (
     <div className="w-full h-full overflow-y-auto p-10 bg-[#F5F8FF]">
       <div className="space-y-8 pb-10">
-        <div>
-          <h2 className="text-lg font-medium mb-3 text-primary">
-            Research Question
-          </h2>
-          <Input
-            placeholder="Enter your research question"
-            value={state.research_question || ""}
-            onChange={(e) =>
-              setState({ ...state, research_question: e.target.value })
-            }
-            aria-label="Research question"
-            className="bg-background px-6 py-8 border-0 shadow-none rounded-xl text-md font-extralight focus-visible:ring-0 placeholder:text-slate-400"
-          />
-        </div>
+        {/* Research Question display */}
+        {state.research_question && (
+          <div className="p-4 bg-[#6766FC]/10 rounded-xl border border-[#6766FC]/20">
+            <div className="text-xs font-medium text-[#6766FC] mb-1">Current Research Question</div>
+            <div className="text-sm text-gray-800">{state.research_question}</div>
+          </div>
+        )}
 
         <div>
           <div className="flex justify-between items-center mb-4">
@@ -184,21 +207,89 @@ export function ResearchCanvas() {
           )}
         </div>
 
-        <div className="flex flex-col h-full">
-          <h2 className="text-lg font-medium mb-3 text-primary">
-            Research Draft
-          </h2>
+        <ResearchDraft 
+          report={state.report || ""} 
+          onReportChange={(report) => setState({ ...state, report })} 
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Research Draft component with Markdown preview toggle
+ */
+function ResearchDraft({ 
+  report, 
+  onReportChange 
+}: { 
+  report: string; 
+  onReportChange: (report: string) => void;
+}) {
+  const [isPreview, setIsPreview] = useState(true);
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-medium text-primary">Research Draft</h2>
+        <div className="flex items-center gap-1 bg-white rounded-lg p-1 shadow-sm">
+          <button
+            onClick={() => setIsPreview(false)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+              !isPreview 
+                ? "bg-[#6766FC] text-white" 
+                : "text-gray-600 hover:bg-gray-100"
+            )}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Edit
+          </button>
+          <button
+            onClick={() => setIsPreview(true)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+              isPreview 
+                ? "bg-[#6766FC] text-white" 
+                : "text-gray-600 hover:bg-gray-100"
+            )}
+          >
+            <Eye className="w-3.5 h-3.5" />
+            Preview
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {isPreview ? (
+          <div 
+            className="h-full overflow-y-auto bg-white rounded-xl px-6 py-8 prose prose-sm max-w-none
+              prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-[#6766FC]
+              prose-strong:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:rounded
+              prose-pre:bg-gray-900 prose-pre:text-gray-100
+              prose-ul:list-disc prose-ol:list-decimal
+              prose-table:border-collapse prose-th:border prose-th:border-gray-300 prose-th:bg-gray-50 prose-th:p-2
+              prose-td:border prose-td:border-gray-300 prose-td:p-2"
+          >
+            {report ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {report}
+              </ReactMarkdown>
+            ) : (
+              <p className="text-slate-400 italic">No research draft yet...</p>
+            )}
+          </div>
+        ) : (
           <Textarea
             data-test-id="research-draft"
-            placeholder="Write your research draft here"
-            value={state.report || ""}
-            onChange={(e) => setState({ ...state, report: e.target.value })}
-            rows={10}
+            placeholder="Write your research draft here (supports Markdown)"
+            value={report}
+            onChange={(e) => onReportChange(e.target.value)}
             aria-label="Research draft"
-            className="bg-background px-6 py-8 border-0 shadow-none rounded-xl text-md font-extralight focus-visible:ring-0 placeholder:text-slate-400"
-            style={{ minHeight: "200px" }}
+            className="h-full bg-white px-6 py-8 border-0 shadow-none rounded-xl text-md font-mono 
+              focus-visible:ring-0 placeholder:text-slate-400 resize-none"
           />
-        </div>
+        )}
       </div>
     </div>
   );

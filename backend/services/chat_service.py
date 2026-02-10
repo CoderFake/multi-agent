@@ -5,8 +5,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import add_messages
-from backend.core.config import settings
-from backend.services.mcp_manager import mcp_manager
+from core.config import settings
+from services.mcp_manager import mcp_manager
 
 
 class AgentState(TypedDict):

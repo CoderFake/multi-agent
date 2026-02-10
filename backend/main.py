@@ -3,8 +3,8 @@ backend/main.py
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.core.config import settings
-from backend.routes import mcp
+from core.config import settings
+from routes import mcp
 import logging
 
 # Setup logging
@@ -21,7 +21,7 @@ logger.info(f"Gemini API Key: {'✓' if settings.gemini_api_key else '✗'}")
 logger.info(f"OpenAI API Key: {'✓' if settings.openai_api_key else '✗'}")
 logger.info("=" * 50)
 
-from backend.routes.copilotkit_endpoint import setup_copilotkit
+from routes.copilotkit_endpoint import setup_copilotkit
 
 app = FastAPI(
     title="FastMCP Chat Server",
@@ -70,7 +70,7 @@ async def root():
 @app.get("/health")
 async def health():
     """Detailed health check"""
-    from backend.services.mcp_manager import mcp_manager
+    from services.mcp_manager import mcp_manager
     
     mcps = await mcp_manager.list_mcps()
     
@@ -84,7 +84,7 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "backend.main:app",
+        "main:app",
         host=settings.backend_host,
         port=settings.backend_port,
         timeout_keep_alive=300,

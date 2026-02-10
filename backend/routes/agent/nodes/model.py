@@ -5,8 +5,8 @@ Get appropriate LLM based on configuration
 
 import logging
 from langchain_core.language_models.chat_models import BaseChatModel
-from backend.core.config import settings
-from backend.routes.agent.state import AgentState
+from core.config import settings
+from routes.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 

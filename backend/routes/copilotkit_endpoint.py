@@ -7,7 +7,7 @@ import logging
 from fastapi import FastAPI
 from copilotkit import LangGraphAGUIAgent
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
-from backend.routes.agent.graph import create_agent_graph
+from routes.agent.graph import create_agent_graph
 
 logger = logging.getLogger(__name__)
 

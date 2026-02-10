@@ -2,12 +2,12 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks
 from typing import List
 import json
 
-from backend.models.schemas import (
+from models.schemas import (
     MCPImportRequest,
     MCPResponse,
     MCPConfig
 )
-from backend.services.mcp_manager import mcp_manager
+from services.mcp_manager import mcp_manager
 
 router = APIRouter(prefix="/api/mcp", tags=["MCP Management"])
 

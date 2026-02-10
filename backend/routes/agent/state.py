@@ -1,9 +1,14 @@
 """
 Agent State Definition
 Combines research-canvas state + MCP-specific state
+
+IMPORTANT: Uses typing_extensions.TypedDict instead of typing.TypedDict
+for Python < 3.12 compatibility with Pydantic (required by ag_ui_langgraph
+to properly generate JSON schema for state snapshots).
 """
 
-from typing import List, TypedDict, Literal, Optional
+from typing import List, Literal, Optional
+from typing_extensions import TypedDict
 from langgraph.graph import MessagesState
 
 

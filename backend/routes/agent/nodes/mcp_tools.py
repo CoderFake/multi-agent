@@ -9,7 +9,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from copilotkit.langgraph import copilotkit_emit_state
-from backend.routes.agent.state import AgentState
+from routes.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 

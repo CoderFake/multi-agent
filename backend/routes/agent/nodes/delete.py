@@ -6,7 +6,7 @@ from typing import cast
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from backend.routes.agent.state import AgentState
+from routes.agent.state import AgentState
 
 
 async def delete_node(state: AgentState, config: RunnableConfig):  # pylint: disable=unused-argument

@@ -13,8 +13,8 @@ from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
 
-from backend.routes.agent.nodes.model import get_model
-from backend.routes.agent.state import AgentState
+from routes.agent.nodes.model import get_model
+from routes.agent.state import AgentState
 
 
 class ResourceInput(BaseModel):
@@ -31,7 +31,7 @@ def ExtractResources(resources: List[ResourceInput]):  # pylint: disable=invalid
 
 
 # Initialize Tavily API key
-from backend.core.config import settings
+from core.config import settings
 
 # Initialize Tavily API key
 tavily_api_key = settings.tavily_api_key

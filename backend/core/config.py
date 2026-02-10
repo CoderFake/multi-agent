@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 # Get the project root directory (parent of backend)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 

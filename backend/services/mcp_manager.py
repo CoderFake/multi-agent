@@ -7,7 +7,7 @@ import uuid
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from backend.models.schemas import MCPConfig
+from models.schemas import MCPConfig
 
 
 class MCPManager:
@@ -136,7 +136,7 @@ class MCPManager:
                             await self._save_mcp_config(mcp_config)
                             
             elif protocol == "sse" or protocol == "http":
-                from backend.services.sse_transport import SSEMCPSession
+                from services.sse_transport import SSEMCPSession
                 
                 async with asyncio.timeout(60):
                     print(f"Connecting to SSE/HTTP MCP: {mcp_config.config['url']}")
@@ -260,7 +260,7 @@ class MCPManager:
                         return mcp_config
                         
             elif protocol == "sse" or protocol == "http":
-                from backend.services.sse_transport import SSEMCPSession
+                from services.sse_transport import SSEMCPSession
                 
                 url = mcp_json.get("url")
                 if not url:
@@ -401,7 +401,7 @@ class MCPManager:
                         }
                         
             elif mcp.protocol == "sse" or mcp.protocol == "http":
-                from backend.services.sse_transport import SSEMCPSession
+                from services.sse_transport import SSEMCPSession
                 
                 url = mcp.config.get("url")
                 headers = mcp.config.get("headers", {})

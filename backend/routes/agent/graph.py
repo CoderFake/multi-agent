@@ -13,14 +13,14 @@ from typing import Any, Dict, List, Optional
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
-from backend.services.mcp_manager import mcp_manager
-from backend.routes.agent.state import AgentState
-from backend.routes.agent.nodes.chat import chat_node
-from backend.routes.agent.nodes.search import search_node
-from backend.routes.agent.nodes.download import download_node
-from backend.routes.agent.nodes.delete import delete_node, perform_delete_node
-from backend.routes.agent.nodes.mcp_tools import mcp_tools_node
-from backend.routes.agent.nodes.model import get_model
+from services.mcp_manager import mcp_manager
+from routes.agent.state import AgentState
+from routes.agent.nodes.chat import chat_node
+from routes.agent.nodes.search import search_node
+from routes.agent.nodes.download import download_node
+from routes.agent.nodes.delete import delete_node, perform_delete_node
+from routes.agent.nodes.mcp_tools import mcp_tools_node
+from routes.agent.nodes.model import get_model
 
 logger = logging.getLogger(__name__)
 
