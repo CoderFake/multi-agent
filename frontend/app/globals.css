@@ -51,6 +51,17 @@
   @apply border-border;
 }
 
+html,
 body {
   @apply bg-background text-foreground;
+  height: 100%;
+  overflow: hidden;
+}
+
+/*
+ * When CopilotChat has no flex-1 class (empty state), hide the messages area
+ * so only the input container is shown — the parent uses justify-center.
+ */
+.copilotKitChat:not(.flex-1) .copilotKitMessages {
+  display: none !important;
 }

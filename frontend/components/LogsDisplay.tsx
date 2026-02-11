@@ -16,7 +16,7 @@ export function LogsDisplay() {
 
             return (
                 <div data-test-id="progress-steps">
-                    <div className="border border-slate-200 bg-slate-100/30 shadow-md rounded-lg overflow-hidden text-sm py-2">
+                    <div className="bg-slate-100/30 rounded-lg overflow-hidden text-sm py-2">
                         {logs.map((log: any, index: number) => (
                             <div
                                 key={index}

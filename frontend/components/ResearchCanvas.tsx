@@ -164,8 +164,8 @@ export function ResearchCanvas({ onStateChange }: ResearchCanvasProps) {
   };
 
   return (
-    <div className="w-full h-full overflow-y-auto p-10 bg-[#F5F8FF]">
-      <div className="space-y-8 pb-10">
+    <div className="w-full h-full flex flex-col overflow-hidden bg-[#F5F8FF]">
+      <div className="flex-1 min-h-0 overflow-y-auto p-10 space-y-8 pb-10">
         {/* Research Question display */}
         {state.research_question && (
           <div className="p-4 bg-[#6766FC]/10 rounded-xl border border-[#6766FC]/20">
