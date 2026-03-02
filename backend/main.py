@@ -5,21 +5,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from routes import mcp
+from routes import memory
+
 import logging
 
 # Setup logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Debug: Print configuration on startup
-logger.info("=" * 50)
-logger.info("Backend Configuration:")
-logger.info(f"Provider: {settings.provider}")
-logger.info(f"Model: {settings.model}")
-logger.info(f"Gemini API Key: {'✓' if settings.gemini_api_key else '✗'}")
-logger.info(f"OpenAI API Key: {'✓' if settings.openai_api_key else '✗'}")
-logger.info("=" * 50)
 
 from routes.copilotkit_endpoint import setup_copilotkit
 
@@ -50,6 +43,7 @@ async def validation_exception_handler(request, exc):
     )
 
 app.include_router(mcp.router)
+app.include_router(memory.router)
 
 @app.on_event("startup")
 async def startup_event():

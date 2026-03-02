@@ -47,7 +47,7 @@ class PlanTask(TypedDict):
 
 class AgentState(MessagesState):
     """
-    Combined state: research-canvas fields + MCP fields
+    Combined state: research-canvas fields + MCP fields + Mem0 fields
     """
     # Model being used
     model: str
@@ -63,3 +63,6 @@ class AgentState(MessagesState):
     # MCP-specific fields
     thinking_step: Optional[ThinkingStep]
     execution_plan: List[PlanTask]
+    
+    # Mem0 memory
+    mem0_user_id: str

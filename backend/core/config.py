@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # MCP
     mcp_storage_path: str = "./mcp_data"
     
+    # Mem0
+    mem0_enabled: bool = True
+    mem0_user_id: str = "default_user"
+    
     class Config:
         env_file = str(ENV_FILE)
         case_sensitive = False

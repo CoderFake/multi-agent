@@ -80,4 +80,35 @@ export const api = {
         });
         if (!response.ok) throw new Error('Failed to approve action');
     },
+
+    // Memory Management
+    async getMemories(userId: string = 'default_user'): Promise<any> {
+        const response = await fetch(`${API_URL}/api/memories?user_id=${encodeURIComponent(userId)}`);
+        if (!response.ok) throw new Error('Failed to get memories');
+        return response.json();
+    },
+
+    async searchMemories(query: string, userId: string = 'default_user', limit: number = 5): Promise<any> {
+        const response = await fetch(`${API_URL}/api/memories/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, user_id: userId, limit }),
+        });
+        if (!response.ok) throw new Error('Failed to search memories');
+        return response.json();
+    },
+
+    async deleteMemory(memoryId: string): Promise<void> {
+        const response = await fetch(`${API_URL}/api/memories/${encodeURIComponent(memoryId)}`, {
+            method: 'DELETE',
+        });
+        if (!response.ok) throw new Error('Failed to delete memory');
+    },
+
+    async deleteAllMemories(userId: string = 'default_user'): Promise<void> {
+        const response = await fetch(`${API_URL}/api/memories?user_id=${encodeURIComponent(userId)}`, {
+            method: 'DELETE',
+        });
+        if (!response.ok) throw new Error('Failed to delete all memories');
+    },
 };

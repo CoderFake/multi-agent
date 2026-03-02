@@ -5,10 +5,11 @@ import { CopilotChat, useCopilotChatSuggestions } from '@copilotkit/react-ui';
 import '@copilotkit/react-ui/styles.css';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Settings, ChevronLeft, ChevronRight, Brain } from 'lucide-react';
 import { SettingsModal } from '@/components/SettingsModal';
 import { ResearchCanvas, ResearchStateInfo } from '@/components/ResearchCanvas';
 import { CustomChatInput, ResearchModeContext } from '@/components/CustomChatInput';
+import { MemoryPanel } from '@/components/MemoryPanel';
 import { cn } from '@/lib/utils';
 
 function ChatContent() {
@@ -16,6 +17,7 @@ function ChatContent() {
     const [researchMode, setResearchMode] = useState(true);
     const [hasInteracted, setHasInteracted] = useState(false);
     const [showResearchPanel, setShowResearchPanel] = useState(false);
+    const [showMemoryPanel, setShowMemoryPanel] = useState(false);
     const [stateInfo, setStateInfo] = useState<ResearchStateInfo>({
         hasData: false,
         resourceCount: 0,
@@ -46,6 +48,18 @@ function ChatContent() {
                         <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => setShowMemoryPanel(!showMemoryPanel)}
+                            className={cn(
+                                "text-gray-800 hover:bg-[#f0f0ff]",
+                                showMemoryPanel && "bg-[#ededff] text-[#6766FC]"
+                            )}
+                            title="Memory"
+                        >
+                            <Brain className="h-5 w-5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => setShowSettings(true)}
                             className="text-gray-800 hover:bg-gray-100"
                         >
@@ -54,7 +68,7 @@ function ChatContent() {
                     </div>
                 </div>
 
-                {/* Main Content — fills remaining height, no outer scroll */}
+                {/* Main Content */}
                 <div className="relative flex flex-1 min-h-0 bg-white from-slate-50 to-slate-100">
                     {/* Chat Section */}
                     <div
@@ -134,6 +148,10 @@ function ChatContent() {
                 <SettingsModal
                     isOpen={showSettings}
                     onClose={() => setShowSettings(false)}
+                />
+                <MemoryPanel
+                    isOpen={showMemoryPanel}
+                    onClose={() => setShowMemoryPanel(false)}
                 />
             </div>
         </ResearchModeContext.Provider>
