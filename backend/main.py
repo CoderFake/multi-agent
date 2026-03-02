@@ -47,7 +47,9 @@ app.include_router(memory.router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize CopilotKit on startup"""
+    """Initialize DB tables and CopilotKit on startup."""
+    from core.database import init_db
+    await init_db()
     await setup_copilotkit(app)
 
 

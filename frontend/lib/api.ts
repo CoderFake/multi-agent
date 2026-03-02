@@ -13,8 +13,15 @@ export interface MCPImportRequest {
     config: Record<string, any>;
 }
 
+// Helper: build headers with optional Bearer token
+function authHeaders(token?: string | null): HeadersInit {
+    const h: HeadersInit = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    return h;
+}
+
 export const api = {
-    // MCP Management
+    // MCP Management (no auth required)
     async importMCP(data: MCPImportRequest): Promise<MCPConfig> {
         const response = await fetch(`${API_URL}/api/mcp/import`, {
             method: 'POST',
@@ -49,9 +56,7 @@ export const api = {
     },
 
     async deleteMCP(id: string): Promise<void> {
-        const response = await fetch(`${API_URL}/api/mcp/${id}`, {
-            method: 'DELETE',
-        });
+        const response = await fetch(`${API_URL}/api/mcp/${id}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Failed to delete MCP');
     },
 
@@ -61,53 +66,46 @@ export const api = {
         return response.json();
     },
 
-    // Chat
-    getChatStreamURL(threadId: string = 'default'): string {
-        return `${API_URL}/api/chat/stream`;
-    },
-
-    async getHistory(threadId: string): Promise<any> {
-        const response = await fetch(`${API_URL}/api/chat/history/${threadId}`);
-        if (!response.ok) throw new Error('Failed to get chat history');
-        return response.json();
-    },
-
-    async approveAction(threadId: string, approved: boolean): Promise<void> {
-        const response = await fetch(`${API_URL}/api/chat/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ thread_id: threadId, approved }),
+    async getMemories(token: string): Promise<any> {
+        const response = await fetch(`${API_URL}/api/memories`, {
+            headers: authHeaders(token),
         });
-        if (!response.ok) throw new Error('Failed to approve action');
-    },
-
-    // Memory Management
-    async getMemories(userId: string = 'default_user'): Promise<any> {
-        const response = await fetch(`${API_URL}/api/memories?user_id=${encodeURIComponent(userId)}`);
         if (!response.ok) throw new Error('Failed to get memories');
         return response.json();
     },
 
-    async searchMemories(query: string, userId: string = 'default_user', limit: number = 5): Promise<any> {
+    async searchMemories(query: string, token: string, limit: number = 5): Promise<any> {
         const response = await fetch(`${API_URL}/api/memories/search`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, user_id: userId, limit }),
+            headers: authHeaders(token),
+            body: JSON.stringify({ query, limit }),
         });
         if (!response.ok) throw new Error('Failed to search memories');
         return response.json();
     },
 
-    async deleteMemory(memoryId: string): Promise<void> {
+    async addMemory(messages: object[], token: string): Promise<any> {
+        const response = await fetch(`${API_URL}/api/memories`, {
+            method: 'POST',
+            headers: authHeaders(token),
+            body: JSON.stringify({ messages }),
+        });
+        if (!response.ok) throw new Error('Failed to add memory');
+        return response.json();
+    },
+
+    async deleteMemory(memoryId: string, token: string): Promise<void> {
         const response = await fetch(`${API_URL}/api/memories/${encodeURIComponent(memoryId)}`, {
             method: 'DELETE',
+            headers: authHeaders(token),
         });
         if (!response.ok) throw new Error('Failed to delete memory');
     },
 
-    async deleteAllMemories(userId: string = 'default_user'): Promise<void> {
-        const response = await fetch(`${API_URL}/api/memories?user_id=${encodeURIComponent(userId)}`, {
+    async deleteAllMemories(token: string): Promise<void> {
+        const response = await fetch(`${API_URL}/api/memories`, {
             method: 'DELETE',
+            headers: authHeaders(token),
         });
         if (!response.ok) throw new Error('Failed to delete all memories');
     },

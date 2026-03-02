@@ -7,7 +7,8 @@ import uuid
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from models.schemas import MCPConfig
+from schemas.agent import MCPConfig
+
 
 
 class MCPManager:

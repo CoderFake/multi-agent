@@ -1,13 +1,19 @@
 """
-MCP Tools Execution Node
-Simple logs emission following research-canvas download.py pattern exactly
+MCP Tools Execution Node — with HITL interrupt before each tool call.
+
+Flow per tool call:
+  1. interrupt({ type: "approval", tool_name, args, description })
+  2. Frontend shows Approve / Reject card
+  3. resume("approved")  → execute tool
+  4. resume("rejected")  → return graceful refusal message
 """
 
+import json
 import logging
 from typing import Literal
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command
+from langgraph.types import Command, interrupt
 from copilotkit.langgraph import copilotkit_emit_state
 from routes.agent.state import AgentState
 
@@ -18,65 +24,79 @@ async def mcp_tools_node(
     state: AgentState,
     config: RunnableConfig,
     mcp_manager,
-    tool_to_mcp_id: dict
+    tool_to_mcp_id: dict,
 ) -> Command[Literal["chat_node"]]:
     """
-    Execute MCP tools with logs emission.
-    Follows research-canvas download_node pattern EXACTLY.
+    Execute MCP tools — pauses before each one for user approval (HITL).
     """
     messages = state.get("messages", [])
     if not messages:
         return Command(goto="chat_node", update={})
-    
+
     last_message = messages[-1]
     if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         return Command(goto="chat_node", update={})
-    
-    # Initialize logs (like research-canvas)
+
     state["logs"] = state.get("logs", [])
-    
+
     valid_mcp_calls = []
     invalid_calls = []
-    
-    # 1. Separate valid commands from invalid ones
+
     for tool_call in last_message.tool_calls:
         tool_name = tool_call["name"]
         if tool_name in tool_to_mcp_id:
             valid_mcp_calls.append(tool_call)
-            state["logs"].append({
-                "message": f"Executing {tool_name}...",
-                "done": False
-            })
         else:
             invalid_calls.append(tool_call)
-    
-    # 2. Emit state if we have valid tools to execute (show spinner)
-    if valid_mcp_calls:
-        await copilotkit_emit_state(config, state)
-    
+
     tool_messages = []
-    log_index = len(state["logs"]) - len(valid_mcp_calls)
-    
-    # 3. Execute valid MCP tools
-    for i, tool_call in enumerate(valid_mcp_calls):
+
+    # ── HITL + execution for each MCP tool ─────────────────────────────
+    for tool_call in valid_mcp_calls:
         tool_name = tool_call["name"]
         tool_args = tool_call["args"]
         tool_id = tool_call["id"]
-        
         mcp_id = tool_to_mcp_id[tool_name]
-        
+
+        # Build a human-readable args summary (truncate if huge)
         try:
-            # Execute MCP tool
+            args_str = json.dumps(tool_args, ensure_ascii=False)
+            if len(args_str) > 300:
+                args_str = args_str[:297] + "…"
+        except Exception:
+            args_str = str(tool_args)
+
+        # ── HITL: pause and ask user ────────────────────────────────────
+        decision = interrupt({
+            "type": "approval",
+            "tool_name": tool_name,
+            "args": tool_args,
+            "args_preview": args_str,
+        })
+
+        if str(decision).lower() in ("rejected", "false", "no", "deny"):
+            logger.info("User rejected tool call: %s", tool_name)
+            tool_messages.append(ToolMessage(
+                content=f"User rejected the action '{tool_name}'. Skipping.",
+                tool_call_id=tool_id,
+            ))
+            continue
+
+        # ── Execute approved tool ───────────────────────────────────────
+        state["logs"].append({"message": f"Executing {tool_name}…", "done": False})
+        log_idx = len(state["logs"]) - 1
+        await copilotkit_emit_state(config, state)
+
+        try:
             result_dict = await mcp_manager.invoke_tool(
                 mcp_id=mcp_id,
                 tool_name=tool_name,
-                arguments=tool_args
+                arguments=tool_args,
             )
-            
+
             if not result_dict.get("success"):
                 result_text = f"Error: {result_dict.get('error', 'Unknown error')}"
             else:
-                # Extract text from result
                 result = result_dict.get("result", [])
                 if isinstance(result, list):
                     texts = [
@@ -88,29 +108,20 @@ async def mcp_tools_node(
                     result_text = result.get("text", str(result))
                 else:
                     result_text = str(result) if result else "Success"
-                    
+
         except Exception as e:
-            logger.exception(f"Error executing {tool_name}")
-            result_text = f"Error: {str(e)}"
-        
-        # Create tool message
-        tool_messages.append(ToolMessage(
-            content=result_text,
-            tool_call_id=tool_id
-        ))
-        
-        # Mark this log as done
-        state["logs"][log_index + i]["done"] = True
-        
-        # Emit state after each tool
+            logger.exception("Error executing %s", tool_name)
+            result_text = f"Error: {e}"
+
+        tool_messages.append(ToolMessage(content=result_text, tool_call_id=tool_id))
+        state["logs"][log_idx]["done"] = True
         await copilotkit_emit_state(config, state)
-        
-    # 4. Handle invalid/unknown tools (Return error messages)
+
+    # ── Unknown / non-MCP tools ─────────────────────────────────────────
     for tool_call in invalid_calls:
         tool_messages.append(ToolMessage(
             content=f"Tool '{tool_call['name']}' is not available as an MCP tool.",
-            tool_call_id=tool_call["id"]
+            tool_call_id=tool_call["id"],
         ))
-    
-    # Route back to chat
+
     return Command(goto="chat_node", update={"messages": tool_messages})

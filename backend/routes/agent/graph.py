@@ -1,15 +1,14 @@
 """
 Agent Graph - Research-canvas pattern + MCP tools
-Combines research features (search, download, delete) with MCP tool execution
+Uses langchain-mcp-adapters for correct tool schema handling (no type transformation)
 """
 
-import os
-import logging
 import asyncio
+import logging
 from functools import partial
-from langchain_core.tools import StructuredTool
-from pydantic import BaseModel, Field, create_model
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -20,119 +19,115 @@ from routes.agent.nodes.search import search_node
 from routes.agent.nodes.download import download_node
 from routes.agent.nodes.delete import delete_node, perform_delete_node
 from routes.agent.nodes.mcp_tools import mcp_tools_node
-from routes.agent.nodes.model import get_model
 
 logger = logging.getLogger(__name__)
 
 
-def _create_mcp_tool_wrapper(mcp_id: str, tool_name: str, tool_config: dict):
+def _build_mcp_connections(mcps) -> Dict[str, Any]:
     """
-    Create a LangChain StructuredTool from MCP tool config.
-    Uses StructuredTool.from_function to avoid Pydantic recursion issues.
+    Build connection dict for MultiServerMCPClient from persisted MCP configs.
+    langchain-mcp-adapters handles tool.inputSchema directly — no type transformation.
     """
-    input_schema = tool_config.get("inputSchema", {})
-    properties = input_schema.get("properties", {})
-    required = input_schema.get("required", [])
-    
-    if not properties:
-        async def tool_func():
-            """Execute MCP tool with no arguments"""
-            result_dict = await mcp_manager.invoke_tool(mcp_id, tool_name, {})
-            return result_dict.get("result", "Success")
-        
-        return StructuredTool.from_function(
-            coroutine=tool_func,
-            name=tool_name,
-            description=tool_config.get("description", "")
-        )
-    
-    fields = {}
-    for prop_name, prop_schema in properties.items():
-        field_type = Any
-        field_description = prop_schema.get("description", "")
-        
-        json_type = prop_schema.get("type")
-        
-        if json_type == "string":
-            field_type = str
-        elif json_type == "number":
-            field_type = float
-        elif json_type == "integer":
-            field_type = int
-        elif json_type == "boolean":
-            field_type = bool
-        elif json_type == "array":
-            items_schema = prop_schema.get("items", {})
-            items_type = items_schema.get("type")
-            
-            if items_type == "object":
-                field_type = List[Dict[str, Any]]
-            elif items_type == "string":
-                field_type = List[str]
-            elif items_type == "number":
-                field_type = List[float]
-            elif items_type == "integer":
-                field_type = List[int]
-            else:
-                field_type = List[Any]
-        elif json_type == "object":
-            field_type = Dict[str, Any]
-        
-        if prop_name in required:
-            fields[prop_name] = (field_type, Field(description=field_description))
+    connections = {}
+    for mcp in mcps:
+        cfg = mcp.config
+        protocol = mcp.protocol
+
+        if protocol == "stdio":
+            conn: Dict[str, Any] = {
+                "transport": "stdio",
+                "command": cfg["command"],
+                "args": cfg.get("args", []),
+            }
+            if cfg.get("env"):
+                conn["env"] = cfg["env"]
+        elif protocol in ("sse", "http"):
+            conn = {
+                "transport": "sse",
+                "url": cfg["url"],
+            }
+            if cfg.get("headers"):
+                conn["headers"] = cfg["headers"]
         else:
-            fields[prop_name] = (field_type, Field(default=None, description=field_description))
-    
-    InputModel = create_model(f"{tool_name}Input", **fields)
-    
-    async def tool_func(**kwargs):
-        """Execute MCP tool with arguments"""
-        result_dict = await mcp_manager.invoke_tool(mcp_id, tool_name, kwargs)
-        return result_dict.get("result", "Success")
-    
-    return StructuredTool.from_function(
-        coroutine=tool_func,
-        name=tool_name,
-        description=tool_config.get("description", ""),
-        args_schema=InputModel
-    )
+            logger.warning(
+                "Unsupported MCP protocol '%s' for server '%s', skipping",
+                protocol, mcp.name
+            )
+            continue
+
+        connections[mcp.name] = conn
+
+    return connections
 
 
 async def _load_mcp_tools():
-    """Load MCP tools and create LangChain StructuredTool wrappers"""
-    all_tools = []
-    tool_to_mcp_id = {}
-    
+    """
+    Load MCP tools via langchain-mcp-adapters MultiServerMCPClient.
+
+    Key benefit: tool.inputSchema (dict[str, Any] per MCP spec) is passed
+    DIRECTLY as StructuredTool.args_schema — no manual parsing, no type loss.
+    """
+    all_tools: List = []
+    tool_to_mcp_id: Dict[str, str] = {}
+
     try:
         mcps = await mcp_manager.list_mcps()
-        logger.info(f"Found {len(mcps)} MCP servers")
-        
-        for mcp in mcps:
-            for tool_config in mcp.tools:
-                tool_name = tool_config.get("name")
-                tool_to_mcp_id[tool_name] = mcp.id
-                
-                tool = _create_mcp_tool_wrapper(mcp.id, tool_name, tool_config)
-                all_tools.append(tool)
-        
-        logger.info(f"Loaded {len(all_tools)} MCP tools")
+        if not mcps:
+            logger.info("No MCP servers configured")
+            return [], {}
+
+        logger.info(
+            "Found %d MCP servers, loading tools via langchain-mcp-adapters", len(mcps)
+        )
+
+        connections = _build_mcp_connections(mcps)
+        if not connections:
+            return [], {}
+
+        name_to_id = {mcp.name: mcp.id for mcp in mcps}
+
+        client = MultiServerMCPClient(connections)
+
+        per_server_tasks = {
+            name: asyncio.create_task(client.get_tools(server_name=name))
+            for name in connections
+        }
+
+        for server_name, task in per_server_tasks.items():
+            try:
+                server_tools = await task
+                mcp_id = name_to_id.get(server_name)
+                for tool in server_tools:
+                    all_tools.append(tool)
+                    if mcp_id:
+                        tool_to_mcp_id[tool.name] = mcp_id
+            except Exception:
+                logger.exception(
+                    "Failed to load tools from MCP server '%s'", server_name
+                )
+
+        logger.info(
+            "Loaded %d MCP tools from %d servers",
+            len(all_tools), len(connections)
+        )
         return all_tools, tool_to_mcp_id
-    
-    except Exception as e:
-        logger.exception("Error loading MCP tools")
+
+    except Exception:
+        logger.exception("Error loading MCP tools via langchain-mcp-adapters")
         return [], {}
 
 
 async def create_agent_graph():
     """
     Create agent graph combining research-canvas + MCP tools.
+    MCP tools loaded via langchain-mcp-adapters — preserves exact inputSchema types.
     """
     logger.info("Creating agent graph...")
-    
+
     mcp_tools, tool_to_mcp_id = await _load_mcp_tools()
-    
+
     workflow = StateGraph(AgentState)
-    
+
     workflow.add_node("download", download_node)
     workflow.add_node("chat_node", partial(
         chat_node,
@@ -141,26 +136,25 @@ async def create_agent_graph():
     workflow.add_node("search_node", search_node)
     workflow.add_node("delete_node", delete_node)
     workflow.add_node("perform_delete_node", perform_delete_node)
-    
+
     workflow.add_node("mcp_tools", partial(
         mcp_tools_node,
         mcp_manager=mcp_manager,
         tool_to_mcp_id=tool_to_mcp_id
     ))
-    
+
     workflow.set_entry_point("download")
     workflow.add_edge("download", "chat_node")
     workflow.add_edge("delete_node", "perform_delete_node")
     workflow.add_edge("perform_delete_node", "chat_node")
     workflow.add_edge("search_node", "download")
-    
     workflow.add_edge("mcp_tools", "chat_node")
-    
+
     memory = MemorySaver()
     graph = workflow.compile(
         checkpointer=memory,
         interrupt_after=["delete_node"]
     )
-    
+
     logger.info("Agent graph compiled successfully")
     return graph

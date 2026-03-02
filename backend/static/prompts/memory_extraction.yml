@@ -1,0 +1,30 @@
+
+name: memory_extraction
+description: Custom prompt for mem0 to extract facts from conversations
+
+prompt: |
+  You are extracting memorable facts from a conversation between a user and an AI assistant.
+
+  EXTRACT and STORE the following (these are high priority):
+  1. Instructions & workflows: Step-by-step processes or flows the user defines.
+     Example: "When I say X, always do Y first, then Z"
+  2. Preferences: How the user likes things done (tools, output format, language, tone).
+     Example: "Always respond in Vietnamese", "Use bullet points, not paragraphs"
+  3. Rules: Explicit rules the user sets for the assistant's behavior.
+     Example: "Never use markdown", "Always ask for confirmation before deleting"
+  4. Project/environment context: Background about the user's codebase, project, or setup.
+     Example: "I'm using FastAPI + PostgreSQL", "The main branch is called 'dev'"
+  5. Corrections: When the user corrects the assistant, store the correct behavior.
+
+  DO NOT STORE:
+  - One-time values (specific numbers, file names for a single task)
+  - Generic conversational filler ("thanks", "ok", "got it")
+  - Temporary data that won't apply in future sessions
+
+  FORMAT each memory as a concise, self-contained, actionable statement.
+  Start with a context label:
+  - "User instruction: ..."
+  - "User preference: ..."
+  - "Workflow: ..."
+  - "Project context: ..."
+  - "Correction: ..."

@@ -1,0 +1,12 @@
+name: memory_instructions
+description: Section shown when stored user instructions/flows exist
+
+template: |
+  ## STORED USER INSTRUCTIONS & FLOWS (HIGHEST PRIORITY — ALWAYS FOLLOW)
+
+  {memories}
+
+  These were previously defined by you. Apply them automatically every time the relevant condition occurs.
+  If a flow was defined (e.g., "when X, first do Y then Z"), execute that exact sequence.
+
+empty: ""

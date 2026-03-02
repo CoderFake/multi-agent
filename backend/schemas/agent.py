@@ -6,8 +6,8 @@ class MCPConfig(BaseModel):
     """MCP Configuration Model"""
     id: str
     name: str
-    protocol: str  # "sse" or "stdio"
-    config: Dict[str, Any]  # The actual MCP configuration
+    protocol: str
+    config: Dict[str, Any]
     tools: List[Dict[str, Any]] = []
 
 

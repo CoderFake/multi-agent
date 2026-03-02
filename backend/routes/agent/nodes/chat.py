@@ -15,6 +15,7 @@ from routes.agent.nodes.download import get_resource
 from routes.agent.nodes.model import get_model
 from routes.agent.state import AgentState
 from core.config import settings
+from utils.prompt_loader import render_prompt, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +270,11 @@ async def chat_node(
     # Truncate resources if too large
     truncated_resources = _truncate_resources(resources, max_chars=15000)
 
-    # --- Mem0: Search for relevant user memories ---
-    user_id = state.get("mem0_user_id", settings.mem0_user_id)
+    # --- Mem0: get user id from Firebase uid (injected by middleware) ---
+    user_id = state.get("mem0_user_id")
+    if not user_id:
+        logger.warning("No mem0_user_id in state — skipping memory operations")
+
     last_user_msg = ""
     for msg in reversed(state.get("messages", [])):
         if hasattr(msg, "type") and msg.type == "human":
@@ -286,36 +290,33 @@ async def chat_node(
         if memories_context:
             logger.info("Injected %d chars of memory context", len(memories_context))
 
+    instructions_section = ""
+    if memories_context:
+        instructions_section = render_prompt(
+            "memory_instructions",
+            memories=memories_context,
+        )
+
+    research_context_parts = []
+    if research_question:
+        research_context_parts.append(f"Research question: {research_question}")
+    if report:
+        research_context_parts.append(f"Current report: {report}")
+    if truncated_resources:
+        research_context_parts.append(f"Available resources: {truncated_resources}")
+    research_context = "\n".join(research_context_parts)
+
+    system_content = render_prompt(
+        "system",
+        instructions_section=instructions_section,
+        research_context=research_context,
+    )
+
     messages = [
-        SystemMessage(
-            content=f"""You are a helpful AI assistant. You can have normal conversations AND help with research when asked.
-
-CONVERSATION MODE (default):
-- Chat naturally with the user, answer questions, help with tasks
-- Use your knowledge and memory of past conversations to personalize responses
-- Be friendly, concise, and helpful
-
-RESEARCH MODE (only when the user explicitly asks for research, report, or deep investigation):
-- Use the Search tool to gather information
-- Use WriteReport to write a structured research report
-- Use WriteResearchQuestion to set the research topic
-- Use DeleteResources to remove unwanted sources
-- Do NOT ask for a research question if the user is just chatting
-
-RULES:
-- RESPOND IN THE SAME LANGUAGE AS THE USER'S MESSAGE
-- If additional MCP tools are available, use them when appropriate
-- Do NOT force research mode on casual conversations
-
-{memories_context}
-
-{"Research question: " + research_question if research_question else ""}
-{"Current report: " + report if report else ""}
-{"Available resources: " + str(truncated_resources) if truncated_resources else ""}
-"""
-        ),
+        SystemMessage(content=system_content),
         *state["messages"],
     ]
+
     
     response = await _invoke_with_retry(
         model=model,
@@ -332,13 +333,10 @@ RULES:
 
     # --- Mem0: Store conversation in memory (fire-and-forget) ---
     if settings.mem0_enabled and last_user_msg and len(last_user_msg.strip()) > 10:
-        # Build AI response content — even when AI makes tool calls
         ai_content = ai_message.content or ""
         if not ai_content and ai_message.tool_calls:
-            # Use tool call info as content so mem0 can extract facts
             tool_info = ai_message.tool_calls[0]
             tool_args = tool_info.get("args", {})
-            # For WriteReport, use the report content
             if tool_info["name"] == "WriteReport":
                 ai_content = tool_args.get("report", "")[:500]
             elif tool_info["name"] == "WriteResearchQuestion":
@@ -354,7 +352,6 @@ RULES:
     if ai_message.tool_calls:
         tool_name = ai_message.tool_calls[0]["name"]
         
-        # Emit tool-specific loading state
         if tool_name == "Search":
             state["logs"].append({"message": "Preparing to search...", "done": False})
         elif tool_name == "WriteReport":
