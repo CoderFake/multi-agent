@@ -50,6 +50,18 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
 
+    # Milvus
+    milvus_host: str = "localhost"
+    milvus_port: int = 19530
+    milvus_collection: str = "agent_knowledge"
+    milvus_embedding_dim: int = 1536       # text-embedding-3-small; change if using Gemini/Ollama
+    milvus_nlist: int = 128                # IVF_FLAT index nlist
+    milvus_nprobe: int = 10               # search nprobe
+    knowledge_top_k: int = 8              # default top-K for KnowledgeSearch
+
+    # Hybrid extractor
+    min_block_density: float = 3.0        # blocks/page below which a PDF is treated as scanned
+
     # Temp directory for processing
     temp_dir: str = "/tmp/file-service"
 

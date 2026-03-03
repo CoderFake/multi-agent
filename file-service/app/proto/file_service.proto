@@ -3,16 +3,26 @@ syntax = "proto3";
 package fileservice;
 
 service FileService {
-  // Process a document: upload → OCR → PageIndex → DB
+  // Process a document: upload → Hybrid Extract → PageIndex → DB + Milvus
   rpc ProcessDocument (ProcessDocumentRequest) returns (ProcessDocumentResponse);
 
   // Check processing status of a document
   rpc GetDocumentStatus (GetDocumentStatusRequest) returns (GetDocumentStatusResponse);
 
-  // Delete a document and its tree/nodes
+  // Delete a document and its tree/nodes from DB + Milvus
   rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+
+  // PageIndex reasoning retrieval for a specific uploaded document
+  rpc RetrieveDocument (RetrieveDocumentRequest) returns (RetrieveDocumentResponse);
+
+  // Milvus semantic search across all user's knowledge base
+  rpc KnowledgeSearch (KnowledgeSearchRequest) returns (KnowledgeSearchResponse);
+
+  // List documents for a user
+  rpc ListDocuments (ListDocumentsRequest) returns (ListDocumentsResponse);
 }
 
+// ── ProcessDocument ────────────────────────────────────────────────────
 message ProcessDocumentRequest {
   string file_name = 1;
   bytes file_data = 2;
@@ -24,8 +34,11 @@ message ProcessDocumentResponse {
   string minio_key = 2;
   string status = 3;
   string message = 4;
+  string engine = 5;
+  int32 page_count = 6;
 }
 
+// ── GetDocumentStatus ──────────────────────────────────────────────────
 message GetDocumentStatusRequest {
   string doc_id = 1;
 }
@@ -36,8 +49,10 @@ message GetDocumentStatusResponse {
   string file_name = 3;
   int32 node_count = 4;
   string message = 5;
+  string engine = 6;
 }
 
+// ── DeleteDocument ─────────────────────────────────────────────────────
 message DeleteDocumentRequest {
   string doc_id = 1;
 }
@@ -45,4 +60,67 @@ message DeleteDocumentRequest {
 message DeleteDocumentResponse {
   bool success = 1;
   string message = 2;
+}
+
+// ── RetrieveDocument (PageIndex reasoning) ─────────────────────────────
+message RetrieveDocumentRequest {
+  string doc_id = 1;
+  string question = 2;
+}
+
+message CitationItem {
+  string node_id = 1;
+  string node_title = 2;
+  string layout_type = 3;  // "text"|"table"|"figure"|"formula"
+  int32 page = 4;
+  repeated float bbox = 5;
+  string section_url = 6;   // MinIO presigned URL for visual section
+  string content_preview = 7;
+}
+
+message RetrieveDocumentResponse {
+  string answer = 1;
+  repeated CitationItem citations = 2;
+  string doc_id = 3;
+}
+
+// ── KnowledgeSearch (Milvus RAG) ───────────────────────────────────────
+message KnowledgeSearchRequest {
+  string user_id = 1;
+  string query = 2;
+  int32 top_k = 3;
+  repeated string doc_ids = 4;  // optional: filter to specific docs
+}
+
+message KnowledgeChunk {
+  string text = 1;
+  float score = 2;
+  string doc_id = 3;
+  string node_id = 4;
+  string node_title = 5;
+  int32 page = 6;
+  string layout_type = 7;
+  string section_url = 8;  // MinIO presigned URL
+}
+
+message KnowledgeSearchResponse {
+  repeated KnowledgeChunk chunks = 1;
+}
+
+// ── ListDocuments ──────────────────────────────────────────────────────
+message ListDocumentsRequest {
+  string user_id = 1;
+}
+
+message DocumentInfo {
+  string doc_id = 1;
+  string file_name = 2;
+  string status = 3;
+  string engine = 4;
+  int32 page_count = 5;
+  string created_at = 6;
+}
+
+message ListDocumentsResponse {
+  repeated DocumentInfo documents = 1;
 }

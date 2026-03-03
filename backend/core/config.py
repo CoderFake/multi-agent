@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "https://ollama1.nws-dev.com"
 
+    # File-service gRPC
+    file_service_grpc_url: str = "localhost:50051"
+    knowledge_top_k: int = 8
+
     # Tavily
     tavily_api_key: str = ""
 

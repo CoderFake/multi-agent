@@ -5,7 +5,7 @@ Document ORM models — async SQLAlchemy mapped to PostgreSQL tables.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func  # noqa: F401
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,8 @@ class Document(Base):
     bucket: Mapped[str] = mapped_column(String(128), default="documents")
     user_id: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="processing")
+    engine: Mapped[str] = mapped_column(String(32), default="hybrid")        # which extractor
+    page_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

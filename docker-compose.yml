@@ -21,10 +21,20 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
-      - "${MINIO_PORT}:9000"
       - "${MINIO_CONSOLE_PORT}:9001"
     volumes:
       - minio_data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: pageindex_nginx
+    depends_on:
+      - minio
+    ports:
+      - "${MINIO_PORT}:9000"
+    volumes:
+      - ./nginx/minio.conf:/etc/nginx/conf.d/minio.conf:ro
     restart: unless-stopped
 
   minio_init:

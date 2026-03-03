@@ -17,18 +17,37 @@ Usage:
 """
 import logging
 from datetime import datetime, timezone
+from typing import Tuple
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, File, HTTPException, UploadFile, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from core.database import get_db
 from models.user import User
 
 logger = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=False)
+
+
+async def validated_upload_file(
+    file: UploadFile = File(...),
+) -> Tuple[bytes, str]:
+    """Dependency: validates filename + size, returns (data, filename)."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No filename provided")
+    data = await file.read()
+    max_bytes = getattr(settings, "max_upload_bytes", 50 * 1024 * 1024)
+    if len(data) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {max_bytes // (1024 * 1024)} MB)",
+        )
+    return data, file.filename
+
 
 
 async def get_current_user(

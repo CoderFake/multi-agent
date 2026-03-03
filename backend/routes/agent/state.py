@@ -68,3 +68,6 @@ class AgentState(MessagesState):
     mem0_user_id: str
     
     research_mode: bool
+
+    # Documents uploaded this session (triggers ChatSessionDocument node)
+    uploaded_doc_ids: List[str]

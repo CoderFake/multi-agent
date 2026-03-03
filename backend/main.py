@@ -12,6 +12,7 @@ from core.config import settings
 from routes import mcp
 from routes import memory
 from routes import chat_history
+from routes import documents
 
 import logging
 
@@ -51,6 +52,7 @@ async def validation_exception_handler(request, exc):
 app.include_router(mcp.router)
 app.include_router(memory.router)
 app.include_router(chat_history.router)
+app.include_router(documents.router)
 
 @app.on_event("startup")
 async def startup_event():

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Settings, ChevronLeft, ChevronRight, Brain, LogOut, CheckCircle, XCircle, Terminal, History } from 'lucide-react';
 import { SettingsModal } from '@/components/SettingsModal';
 import { ResearchCanvas, ResearchStateInfo } from '@/components/ResearchCanvas';
-import { CustomChatInput, ResearchModeContext } from '@/components/CustomChatInput';
+import { CustomChatInput, ResearchModeContext, UploadedDoc } from '@/components/CustomChatInput';
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { ChatHistory } from '@/components/ChatHistory';
 import { LoginPage } from '@/components/LoginPage';
@@ -76,6 +76,7 @@ function ChatContent({ token, researchMode, setResearchMode, refreshToken }: { t
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [chatKey, setChatKey] = useState(0);
     const [sidebarRefresh, setSidebarRefresh] = useState(0);
+    const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
     const [stateInfo, setStateInfo] = useState<ResearchStateInfo>({
         hasData: false,
         resourceCount: 0,
@@ -141,7 +142,7 @@ function ChatContent({ token, researchMode, setResearchMode, refreshToken }: { t
     });
 
     return (
-        <ResearchModeContext.Provider value={{ researchMode, setResearchMode, hasInteracted, setHasInteracted }}>
+        <ResearchModeContext.Provider value={{ researchMode, setResearchMode, hasInteracted, setHasInteracted, uploadedDocs, setUploadedDocs }}>
             <div className="h-screen flex overflow-hidden">
                 {/* ── Left Sidebar (ChatGPT-style) ──────────────────────── */}
                 <div

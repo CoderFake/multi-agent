@@ -203,4 +203,58 @@ export const api = {
         if (!response.ok) throw new Error('Failed to get messages');
         return response.json();
     },
+
+    // ── Document / File Upload ─────────────────────────────────────────────
+
+    /** Upload a document for the current chat session. Returns { doc_id, status, engine }. */
+    async uploadSessionDoc(file: File, token: string): Promise<{ doc_id: string; status: string; engine: string; page_count: number }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_URL}/api/documents/session`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+        });
+        if (!res.ok) throw new Error('Failed to upload session document');
+        return res.json();
+    },
+
+    async getDocumentStatus(docId: string, token: string): Promise<{ doc_id: string; status: string; node_count: number; engine: string }> {
+        const res = await fetch(`${API_URL}/api/documents/${docId}/status`, {
+            headers: authHeaders(token),
+        });
+        if (!res.ok) throw new Error('Failed to get document status');
+        return res.json();
+    },
+
+    // ── Knowledge Base ─────────────────────────────────────────────────────
+
+    async uploadKnowledgeDoc(file: File, token: string): Promise<{ doc_id: string; status: string }> {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_URL}/api/documents/knowledge`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+        });
+        if (!res.ok) throw new Error('Failed to upload knowledge document');
+        return res.json();
+    },
+
+    async listKnowledgeDocs(token: string): Promise<any[]> {
+        const res = await fetch(`${API_URL}/api/documents/knowledge`, {
+            headers: authHeaders(token),
+        });
+        if (!res.ok) throw new Error('Failed to list knowledge docs');
+        return res.json();
+    },
+
+    async deleteKnowledgeDoc(docId: string, token: string): Promise<void> {
+        const res = await fetch(`${API_URL}/api/documents/${docId}`, {
+            method: 'DELETE',
+            headers: authHeaders(token),
+        });
+        if (!res.ok) throw new Error('Failed to delete document');
+    },
 };
+

@@ -2,21 +2,37 @@
 Async MinIO service — upload, delete, presigned URL generation.
 Uses miniopy-async for non-blocking I/O.
 
-Presigned URLs use the INTERNAL MinIO endpoint (minio:9000 in Docker).
-Nginx reverse proxy converts external requests:
-  http(s)://external:29000/... → http://minio:9000/...
-Schema serializers handle URL rewriting in responses.
+Presigned URLs are generated using the INTERNAL MinIO endpoint (minio:9000 in Docker)
+so that the SDK signature matches. Before returning to callers the URL host is
+rewritten to minio_external_url (e.g. http://localhost:29000) so browsers can reach it
+via the nginx reverse proxy that sits in front of MinIO.
 """
 
 import io
 import logging
 from datetime import timedelta
+from urllib.parse import urlparse, urlunparse
 
 from miniopy_async import Minio
 
 from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def rewrite_to_external(url: str) -> str:
+    """Replace the internal MinIO host with the externally reachable URL.
+
+    Example:
+      http://minio:9000/documents/abc.pdf?X-Amz-...
+      → http://localhost:29000/documents/abc.pdf?X-Amz-...
+    """
+    if not url or not settings.minio_external_url:
+        return url
+    parsed = urlparse(url)
+    external = urlparse(settings.minio_external_url)
+    rewritten = parsed._replace(scheme=external.scheme, netloc=external.netloc)
+    return urlunparse(rewritten)
 
 
 class MinioService:
@@ -73,16 +89,13 @@ class MinioService:
         return object_key
 
     async def get_presigned_url(self, object_key: str, expires_hours: int = 24) -> str:
-        """
-        Generate presigned URL using INTERNAL MinIO endpoint.
-        Nginx handles external→internal URL rewriting.
-        """
+        """Generate presigned URL, rewritten to the external MinIO address."""
         url = await self.client.presigned_get_object(
             settings.minio_bucket,
             object_key,
             expires=timedelta(hours=expires_hours),
         )
-        return url
+        return rewrite_to_external(url)
 
     async def delete_object(self, object_key: str):
         """Delete an object from MinIO."""

@@ -1,6 +1,16 @@
 """
-Agent Graph - Research-canvas pattern + MCP tools
-Uses langchain-mcp-adapters for correct tool schema handling (no type transformation)
+Agent Graph - Research-canvas pattern + MCP tools + Document Intelligence
+
+Reasoning flow:
+  START
+    → download_node         (load resources from state)
+    → chat_node             (mem0 context, tool binding)
+    → document_node         (HITL, if uploaded_doc_ids non-empty)
+    → knowledge_node        (HITL, if research_mode=True — Milvus RAG)
+    → search_node           (Tavily web search, if research_mode=True)
+    → mcp_tools             (HITL, external MCP tool execution)
+    → chat_node             (final synthesis with all context + citations)
+    → END
 """
 
 import asyncio
@@ -19,15 +29,12 @@ from routes.agent.nodes.search import search_node
 from routes.agent.nodes.download import download_node
 from routes.agent.nodes.delete import delete_node, perform_delete_node
 from routes.agent.nodes.mcp_tools import mcp_tools_node
+from routes.agent.nodes.document_tools import document_node, knowledge_node
 
 logger = logging.getLogger(__name__)
 
 
 def _build_mcp_connections(mcps) -> Dict[str, Any]:
-    """
-    Build connection dict for MultiServerMCPClient from persisted MCP configs.
-    langchain-mcp-adapters handles tool.inputSchema directly — no type transformation.
-    """
     connections = {}
     for mcp in mcps:
         cfg = mcp.config
@@ -42,31 +49,18 @@ def _build_mcp_connections(mcps) -> Dict[str, Any]:
             if cfg.get("env"):
                 conn["env"] = cfg["env"]
         elif protocol in ("sse", "http"):
-            conn = {
-                "transport": "sse",
-                "url": cfg["url"],
-            }
+            conn = {"transport": "sse", "url": cfg["url"]}
             if cfg.get("headers"):
                 conn["headers"] = cfg["headers"]
         else:
-            logger.warning(
-                "Unsupported MCP protocol '%s' for server '%s', skipping",
-                protocol, mcp.name
-            )
+            logger.warning("Unsupported MCP protocol '%s' for '%s', skipping", protocol, mcp.name)
             continue
 
         connections[mcp.name] = conn
-
     return connections
 
 
 async def _load_mcp_tools():
-    """
-    Load MCP tools via langchain-mcp-adapters MultiServerMCPClient.
-
-    Key benefit: tool.inputSchema (dict[str, Any] per MCP spec) is passed
-    DIRECTLY as StructuredTool.args_schema — no manual parsing, no type loss.
-    """
     all_tools: List = []
     tool_to_mcp_id: Dict[str, str] = {}
 
@@ -76,16 +70,11 @@ async def _load_mcp_tools():
             logger.info("No MCP servers configured")
             return [], {}
 
-        logger.info(
-            "Found %d MCP servers, loading tools via langchain-mcp-adapters", len(mcps)
-        )
-
         connections = _build_mcp_connections(mcps)
         if not connections:
             return [], {}
 
         name_to_id = {mcp.name: mcp.id for mcp in mcps}
-
         client = MultiServerMCPClient(connections)
 
         per_server_tasks = {
@@ -102,58 +91,121 @@ async def _load_mcp_tools():
                     if mcp_id:
                         tool_to_mcp_id[tool.name] = mcp_id
             except Exception:
-                logger.exception(
-                    "Failed to load tools from MCP server '%s'", server_name
-                )
+                logger.exception("Failed to load tools from MCP server '%s'", server_name)
 
-        logger.info(
-            "Loaded %d MCP tools from %d servers",
-            len(all_tools), len(connections)
-        )
+        logger.info("Loaded %d MCP tools from %d servers", len(all_tools), len(connections))
         return all_tools, tool_to_mcp_id
 
     except Exception:
-        logger.exception("Error loading MCP tools via langchain-mcp-adapters")
+        logger.exception("Error loading MCP tools")
         return [], {}
 
 
+# ── Conditional routing ────────────────────────────────────────────────
+
+def _route_from_chat(state: AgentState) -> str:
+    """
+    After chat_node:
+      - if last message has tool_calls → MCP tools
+      - if uploaded_doc_ids → document_node
+      - else → END
+    """
+    messages = state.get("messages", [])
+    if not messages:
+        return "__end__"
+
+    last = messages[-1]
+
+    # Check for MCP tool calls
+    if hasattr(last, "tool_calls") and last.tool_calls:
+        return "mcp_tools"
+
+    # Check for document retrieval need
+    if state.get("uploaded_doc_ids"):
+        return "document_node"
+
+    return "__end__"
+
+
+def _route_from_document(state: AgentState) -> str:
+    """After document_node → knowledge_node (always, to check research_mode)."""
+    return "knowledge_node"
+
+
+def _route_from_knowledge(state: AgentState) -> str:
+    """After knowledge_node → search_node if research_mode, else chat_node for synthesis."""
+    if state.get("research_mode", False):
+        return "search_node"
+    return "chat_node"
+
+
+# ── Graph construction ─────────────────────────────────────────────────
+
 async def create_agent_graph():
     """
-    Create agent graph combining research-canvas + MCP tools.
-    MCP tools loaded via langchain-mcp-adapters — preserves exact inputSchema types.
+    Create agent graph: research-canvas + MCP tools + Document Intelligence pipeline.
     """
-    logger.info("Creating agent graph...")
-
+    logger.info("Creating agent graph…")
     mcp_tools, tool_to_mcp_id = await _load_mcp_tools()
 
     workflow = StateGraph(AgentState)
 
+    # ── Nodes ────────────────────────────────────────────────────────
     workflow.add_node("download", download_node)
-    workflow.add_node("chat_node", partial(
-        chat_node,
-        mcp_tools=mcp_tools
-    ))
+    workflow.add_node("chat_node", partial(chat_node, mcp_tools=mcp_tools))
+    workflow.add_node("document_node", document_node)
+    workflow.add_node("knowledge_node", knowledge_node)
     workflow.add_node("search_node", search_node)
     workflow.add_node("delete_node", delete_node)
     workflow.add_node("perform_delete_node", perform_delete_node)
-
     workflow.add_node("mcp_tools", partial(
         mcp_tools_node,
         mcp_manager=mcp_manager,
-        tool_to_mcp_id=tool_to_mcp_id
+        tool_to_mcp_id=tool_to_mcp_id,
     ))
 
+    # ── Edges ────────────────────────────────────────────────────────
     workflow.set_entry_point("download")
     workflow.add_edge("download", "chat_node")
+
+    # chat_node → conditional: MCP tools | document_node | __end__
+    workflow.add_conditional_edges(
+        "chat_node",
+        _route_from_chat,
+        {
+            "mcp_tools": "mcp_tools",
+            "document_node": "document_node",
+            "__end__": "__end__",
+        },
+    )
+
+    # document_node → knowledge_node
+    workflow.add_conditional_edges(
+        "document_node",
+        _route_from_document,
+        {"knowledge_node": "knowledge_node"},
+    )
+
+    # knowledge_node → search_node | chat_node (synthesis)
+    workflow.add_conditional_edges(
+        "knowledge_node",
+        _route_from_knowledge,
+        {
+            "search_node": "search_node",
+            "chat_node": "chat_node",
+        },
+    )
+
+    # search_node loops back through download (to refresh resources) → chat_node
+    workflow.add_edge("search_node", "download")
     workflow.add_edge("delete_node", "perform_delete_node")
     workflow.add_edge("perform_delete_node", "chat_node")
-    workflow.add_edge("search_node", "download")
     workflow.add_edge("mcp_tools", "chat_node")
 
     memory = MemorySaver()
     graph = workflow.compile(
         checkpointer=memory,
-        interrupt_after=["delete_node"]
+        interrupt_after=["delete_node"],
     )
 
     logger.info("Agent graph compiled successfully")
