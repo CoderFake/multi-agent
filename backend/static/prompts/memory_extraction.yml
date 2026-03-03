@@ -28,3 +28,7 @@ prompt: |
   - "Workflow: ..."
   - "Project context: ..."
   - "Correction: ..."
+
+  Return a JSON object with a single key "facts" containing an array of extracted facts.
+  Example: {"facts": ["User preference: Always respond in Vietnamese", "Project context: Using FastAPI + PostgreSQL"]}
+  If no memorable facts are found, return: {"facts": []}

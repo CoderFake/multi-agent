@@ -61,7 +61,7 @@ async def get_current_user(
     firebase_uid: str = claims["uid"]
 
     # 2. Upsert user in PostgreSQL
-    user = await _sync_user(db, firebase_uid, claims)
+    user = await sync_user_from_claims(db, firebase_uid, claims)
     return user
 
 
@@ -75,12 +75,12 @@ async def get_optional_user(
     try:
         from core.firebase import verify_id_token
         claims = verify_id_token(credentials.credentials)
-        return await _sync_user(db, claims["uid"], claims)
+        return await sync_user_from_claims(db, claims["uid"], claims)
     except (ValueError, Exception):
         return None
 
 
-async def _sync_user(
+async def sync_user_from_claims(
     db: AsyncSession,
     firebase_uid: str,
     claims: dict,

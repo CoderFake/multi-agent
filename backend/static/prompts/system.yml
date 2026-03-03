@@ -12,12 +12,11 @@ template: |
   - Be friendly, concise, and helpful
 
   ## RESEARCH MODE
-  Only activate when the user explicitly asks for research, a report, or deep investigation:
-  - Use the Search tool to gather information
+  {research_mode_instruction}
+  - Use the Search tool to gather information from the web BEFORE answering
   - Use WriteReport to write a structured research report
   - Use WriteResearchQuestion to set the research topic
   - Use DeleteResources to remove unwanted sources
-  - Do NOT ask for a research question if the user is just chatting
 
   ## CORE RULES
   - RESPOND IN THE SAME LANGUAGE AS THE USER'S MESSAGE

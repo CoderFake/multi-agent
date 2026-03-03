@@ -1,11 +1,17 @@
 """
 backend/main.py
 """
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="ag_ui_langgraph")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
+warnings.filterwarnings("ignore", message=".*declarative_base.*", module="mem0")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from routes import mcp
 from routes import memory
+from routes import chat_history
 
 import logging
 
@@ -44,13 +50,22 @@ async def validation_exception_handler(request, exc):
 
 app.include_router(mcp.router)
 app.include_router(memory.router)
+app.include_router(chat_history.router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize DB tables and CopilotKit on startup."""
+    """Initialize DB tables, CopilotKit, and preload services on startup."""
     from core.database import init_db
     await init_db()
     await setup_copilotkit(app)
+    
+    if settings.mem0_enabled:
+        try:
+            from services.memory_service import memory_service
+            memory_service._get_memory()
+            logger.info("Mem0 preloaded at startup")
+        except Exception as e:
+            logger.warning("Failed to preload mem0: %s", e)
 
 
 @app.get("/")

@@ -11,64 +11,18 @@ Flow:
 Memory /api/* routes are protected separately by Depends(get_current_user).
 """
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 from routes.agent.graph import create_agent_graph
+from core.database import get_db
+from core.dependencies import sync_user_from_claims
 
 logger = logging.getLogger(__name__)
-
-_PROTECTED_PREFIXES = ("/api/memories",)
-
-
-async def _resolve_user_id(token: str | None) -> str | None:
-    """
-    Verify Firebase token → upsert user in PostgreSQL → return UUIDv7 user.id.
-    Returns None if token is missing or invalid.
-    """
-    if not token:
-        return None
-    token = token.removeprefix("Bearer ").strip()
-    try:
-        from core.firebase import verify_id_token
-        from core.database import AsyncSessionLocal
-        from models.user import User
-        from sqlalchemy import select
-        from datetime import datetime, timezone
-
-        claims = verify_id_token(token)
-        firebase_uid = claims["uid"]
-
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(User).where(User.firebase_uid == firebase_uid)
-            )
-            user = result.scalar_one_or_none()
-
-            if user is None:
-                user = User(
-                    firebase_uid=firebase_uid,
-                    email=claims.get("email"),
-                    display_name=claims.get("name"),
-                    photo_url=claims.get("picture"),
-                )
-                db.add(user)
-                logger.info("New user: %s (%s)", firebase_uid, claims.get("email"))
-            else:
-                user.email = claims.get("email")
-                user.display_name = claims.get("name")
-                user.photo_url = claims.get("picture")
-                user.last_seen_at = datetime.now(timezone.utc)
-
-            await db.commit()
-            await db.refresh(user)
-            return user.id
-    except Exception as e:
-        logger.warning("Auth failed: %s", e)
-        return None
 
 
 async def setup_copilotkit(app: FastAPI):
@@ -88,7 +42,11 @@ async def setup_copilotkit(app: FastAPI):
 
     # ── Custom /copilotkit endpoint ─────────────────────────────────────
     @app.post("/copilotkit")
-    async def copilotkit_endpoint(input_data: RunAgentInput, request: Request):
+    async def copilotkit_endpoint(
+        input_data: RunAgentInput,
+        request: Request,
+        db: AsyncSession = Depends(get_db),
+    ):
         """
         Accepts CopilotKit AG-UI protocol.
         Extracts Firebase token from forwarded_props.authorization,
@@ -98,12 +56,21 @@ async def setup_copilotkit(app: FastAPI):
         enc = EventEncoder(accept=accept)
 
         forwarded = input_data.forwarded_props or {}
-        raw_token = forwarded.get("authorization") or forwarded.get("Authorization")
-
+        raw_token = forwarded.get("authorization") or forwarded.get("Authorization") or ""
         if not raw_token:
             raw_token = request.headers.get("Authorization", "")
+        raw_token = raw_token.removeprefix("Bearer ").strip()
 
-        user_id = await _resolve_user_id(raw_token)
+        user_id = None
+        if raw_token:
+            try:
+                from core.firebase import verify_id_token
+                claims = verify_id_token(raw_token)
+                user = await sync_user_from_claims(db, claims["uid"], claims)
+                await db.flush()
+                user_id = user.id
+            except Exception as e:
+                logger.warning("Auth failed: %s", e)
 
         if not user_id:
             return JSONResponse(
@@ -111,11 +78,13 @@ async def setup_copilotkit(app: FastAPI):
                 content={"detail": "Unauthorized — valid Firebase token required"},
             )
 
+        research_mode = bool(forwarded.get("researchMode", False))
+
         existing_state = input_data.state or {}
-        patched_state = {**existing_state, "mem0_user_id": user_id}
+        patched_state = {**existing_state, "mem0_user_id": user_id, "research_mode": research_mode}
         patched_input = input_data.copy(update={"state": patched_state})
 
-        logger.debug("CopilotKit request: user_id=%s thread=%s", user_id, input_data.thread_id)
+        logger.debug("CopilotKit request: user_id=%s thread=%s research_mode=%s", user_id, input_data.thread_id, research_mode)
 
         async def event_generator():
             async for event in agent.run(patched_input):

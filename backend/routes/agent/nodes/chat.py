@@ -15,7 +15,7 @@ from routes.agent.nodes.download import get_resource
 from routes.agent.nodes.model import get_model
 from routes.agent.state import AgentState
 from core.config import settings
-from utils.prompt_loader import render_prompt, load_prompt
+from utils.prompt_loader import render_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +242,24 @@ async def chat_node(
     research_question = state.get("research_question", "")
     report = state.get("report", "")
 
+    # --- Extract last user message early (needed for memory search) ---
+    user_id = state.get("mem0_user_id")
+    last_user_msg = ""
+    for msg in reversed(state.get("messages", [])):
+        if hasattr(msg, "type") and msg.type == "human":
+            last_user_msg = msg.content
+            break
+        elif isinstance(msg, dict) and msg.get("role") == "user":
+            last_user_msg = msg.get("content", "")
+            break
+
+    # --- Start memory search in parallel with resource processing ---
+    memory_task = None
+    if last_user_msg and settings.mem0_enabled and user_id:
+        memory_task = asyncio.create_task(
+            _search_user_memories(last_user_msg, user_id)
+        )
+
     resources = []
 
     for resource in state["resources"]:
@@ -270,23 +288,13 @@ async def chat_node(
     # Truncate resources if too large
     truncated_resources = _truncate_resources(resources, max_chars=15000)
 
-    # --- Mem0: get user id from Firebase uid (injected by middleware) ---
-    user_id = state.get("mem0_user_id")
+    # --- Mem0: await memory search result (was started earlier in parallel) ---
     if not user_id:
         logger.warning("No mem0_user_id in state — skipping memory operations")
 
-    last_user_msg = ""
-    for msg in reversed(state.get("messages", [])):
-        if hasattr(msg, "type") and msg.type == "human":
-            last_user_msg = msg.content
-            break
-        elif isinstance(msg, dict) and msg.get("role") == "user":
-            last_user_msg = msg.get("content", "")
-            break
-
     memories_context = ""
-    if last_user_msg and settings.mem0_enabled:
-        memories_context = await _search_user_memories(last_user_msg, user_id)
+    if memory_task:
+        memories_context = await memory_task
         if memories_context:
             logger.info("Injected %d chars of memory context", len(memories_context))
 
@@ -306,10 +314,23 @@ async def chat_node(
         research_context_parts.append(f"Available resources: {truncated_resources}")
     research_context = "\n".join(research_context_parts)
 
+    research_mode = state.get("research_mode", False)
+    if research_mode:
+        research_mode_instruction = (
+            "Research mode is ENABLED. You MUST use the Search tool to find up-to-date information "
+            "from the web BEFORE answering ANY question. Always search first, then synthesize the results."
+        )
+    else:
+        research_mode_instruction = (
+            "Only activate when the user explicitly asks for research, a report, or deep investigation. "
+            "Do NOT search if the user is just chatting."
+        )
+
     system_content = render_prompt(
         "system",
         instructions_section=instructions_section,
         research_context=research_context,
+        research_mode_instruction=research_mode_instruction,
     )
 
     messages = [

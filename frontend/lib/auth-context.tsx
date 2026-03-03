@@ -9,15 +9,16 @@ import {
 } from 'react';
 import {
     User,
-    onAuthStateChanged,
+    onIdTokenChanged,
     signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useCallback, useRef } from 'react';
 
 interface AuthContextValue {
     user: User | null;
     loading: boolean;
-    getIdToken: () => Promise<string | null>;
+    getIdToken: (forceRefresh?: boolean) => Promise<string | null>;
     signOut: () => Promise<void>;
 }
 
@@ -31,27 +32,30 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const userRef = useRef<User | null>(null);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        const unsubscribe = onIdTokenChanged(auth, (firebaseUser) => {
+            userRef.current = firebaseUser;
             setUser(firebaseUser);
             setLoading(false);
         });
         return unsubscribe;
     }, []);
 
-    const getIdToken = async (): Promise<string | null> => {
-        if (!user) return null;
+    const getIdToken = useCallback(async (forceRefresh = false): Promise<string | null> => {
+        const u = userRef.current;
+        if (!u) return null;
         try {
-            return await user.getIdToken();
+            return await u.getIdToken(forceRefresh);
         } catch {
             return null;
         }
-    };
+    }, []);
 
-    const signOut = async () => {
+    const signOut = useCallback(async () => {
         await firebaseSignOut(auth);
-    };
+    }, []);
 
     return (
         <AuthContext.Provider value={{ user, loading, getIdToken, signOut }}>

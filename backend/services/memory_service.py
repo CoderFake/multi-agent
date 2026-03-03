@@ -15,6 +15,7 @@ import asyncio
 import logging
 from typing import Optional, List, Dict, Any
 from core.database import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
 from models.memory import Memory
 from sqlalchemy import delete, select
 from core.config import settings
@@ -112,10 +113,7 @@ class MemoryService:
                     "hnsw": True,
                 },
             },
-            "history_db_path": (
-                f"postgresql://{settings.mem0_pg_user}:{settings.mem0_pg_password}"
-                f"@{settings.mem0_pg_host}:{settings.mem0_pg_port}/{settings.mem0_pg_db}"
-            ),
+            "history_db_path": f"postgresql+psycopg2://{settings.mem0_pg_user}:{settings.mem0_pg_password}@{settings.mem0_pg_host}:{settings.mem0_pg_port}/{settings.mem0_pg_db}",
         }
         extraction_prompt = self._load_extraction_prompt()
         if extraction_prompt:
@@ -214,35 +212,32 @@ class MemoryService:
             logger.error("Error searching memories: %s", e)
             return []
 
-    async def get_all_memories(self, user_id: str) -> List[Dict[str, Any]]:
+    async def get_all_memories(self, user_id: str, db: AsyncSession) -> List[Dict[str, Any]]:
         """
         Fetch all memories directly from PostgreSQL memories table.
         Much faster than going through mem0's API (no LLM round-trip).
         """
         try:
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(Memory)
-                    .where(Memory.user_id == user_id)
-                    .order_by(Memory.created_at.desc())
-                )
-                rows = result.scalars().all()
-                return [row.to_dict() for row in rows]
+            result = await db.execute(
+                select(Memory)
+                .where(Memory.user_id == user_id)
+                .order_by(Memory.created_at.desc())
+            )
+            rows = result.scalars().all()
+            return [row.to_dict() for row in rows]
         except Exception as e:
             logger.error("Error getting memories from DB for user '%s': %s", user_id, e)
             return []
 
-    async def delete_memory(self, memory_id: str) -> bool:
+    async def delete_memory(self, memory_id: str, db: AsyncSession) -> bool:
         """Delete from mem0 + memories table."""
         try:
             memory = self._get_memory()
             await asyncio.to_thread(memory.delete, memory_id)
 
-            async with AsyncSessionLocal() as db:
-                row = await db.get(Memory, memory_id)
-                if row:
-                    await db.delete(row)
-                    await db.commit()
+            row = await db.get(Memory, memory_id)
+            if row:
+                await db.delete(row)
 
             logger.info("Deleted memory: %s", memory_id)
             return True
@@ -250,17 +245,15 @@ class MemoryService:
             logger.error("Error deleting memory '%s': %s", memory_id, e)
             return False
 
-    async def delete_all_memories(self, user_id: str) -> bool:
+    async def delete_all_memories(self, user_id: str, db: AsyncSession) -> bool:
         """Delete all memories for a user from mem0 + memories table."""
         try:
             memory = self._get_memory()
             await asyncio.to_thread(memory.delete_all, user_id=user_id)
 
-            async with AsyncSessionLocal() as db:
-                await db.execute(
-                    delete(Memory).where(Memory.user_id == user_id)
-                )
-                await db.commit()
+            await db.execute(
+                delete(Memory).where(Memory.user_id == user_id)
+            )
 
             logger.info("Deleted all memories for user '%s'", user_id)
             return True

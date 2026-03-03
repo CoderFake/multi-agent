@@ -109,4 +109,98 @@ export const api = {
         });
         if (!response.ok) throw new Error('Failed to delete all memories');
     },
+
+    // ── Chat History ──────────────────────────────────────────────────
+
+    async listChatSessions(token: string, limit = 50, offset = 0): Promise<any> {
+        const response = await fetch(
+            `${API_URL}/api/chat/sessions?limit=${limit}&offset=${offset}`,
+            { headers: authHeaders(token) },
+        );
+        if (!response.ok) throw new Error('Failed to list chat sessions');
+        return response.json();
+    },
+
+    async createChatSession(token: string, title?: string): Promise<any> {
+        const response = await fetch(`${API_URL}/api/chat/sessions`, {
+            method: 'POST',
+            headers: authHeaders(token),
+            body: JSON.stringify({ title: title || null }),
+        });
+        if (!response.ok) throw new Error('Failed to create chat session');
+        return response.json();
+    },
+
+    async getChatSession(sessionId: string, token: string): Promise<any> {
+        const response = await fetch(`${API_URL}/api/chat/sessions/${sessionId}`, {
+            headers: authHeaders(token),
+        });
+        if (!response.ok) throw new Error('Failed to get chat session');
+        return response.json();
+    },
+
+    async updateChatSessionTitle(sessionId: string, title: string, token: string): Promise<void> {
+        const response = await fetch(`${API_URL}/api/chat/sessions/${sessionId}`, {
+            method: 'PATCH',
+            headers: authHeaders(token),
+            body: JSON.stringify({ title }),
+        });
+        if (!response.ok) throw new Error('Failed to update session title');
+    },
+
+    async deleteChatSession(sessionId: string, token: string): Promise<void> {
+        const response = await fetch(`${API_URL}/api/chat/sessions/${sessionId}`, {
+            method: 'DELETE',
+            headers: authHeaders(token),
+        });
+        if (!response.ok) throw new Error('Failed to delete chat session');
+    },
+
+    async deleteAllChatSessions(token: string): Promise<void> {
+        const response = await fetch(`${API_URL}/api/chat/sessions`, {
+            method: 'DELETE',
+            headers: authHeaders(token),
+        });
+        if (!response.ok) throw new Error('Failed to delete all sessions');
+    },
+
+    async addChatMessage(
+        token: string,
+        query: string,
+        response?: string,
+        sessionId?: string,
+    ): Promise<any> {
+        const res = await fetch(`${API_URL}/api/chat/messages`, {
+            method: 'POST',
+            headers: authHeaders(token),
+            body: JSON.stringify({
+                query,
+                response: response || null,
+                session_id: sessionId || null,
+            }),
+        });
+        if (!res.ok) throw new Error('Failed to add chat message');
+        return res.json();
+    },
+
+    async updateChatMessageResponse(
+        messageId: string,
+        responseText: string,
+        token: string,
+    ): Promise<void> {
+        const res = await fetch(`${API_URL}/api/chat/messages/${messageId}`, {
+            method: 'PATCH',
+            headers: authHeaders(token),
+            body: JSON.stringify({ response: responseText }),
+        });
+        if (!res.ok) throw new Error('Failed to update message response');
+    },
+
+    async getChatMessages(sessionId: string, token: string): Promise<any> {
+        const response = await fetch(`${API_URL}/api/chat/sessions/${sessionId}/messages`, {
+            headers: authHeaders(token),
+        });
+        if (!response.ok) throw new Error('Failed to get messages');
+        return response.json();
+    },
 };

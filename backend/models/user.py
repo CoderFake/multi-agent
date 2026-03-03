@@ -9,27 +9,23 @@ Flow:
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from uuid_extensions import uuid7str   
+from uuid6 import uuid7
 from sqlalchemy import String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
 
-
 class User(Base):
     __tablename__ = "users"
 
-    # UUIDv7 internal PK — time-ordered, sortable
     id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=uuid7str
+        String(36), primary_key=True, default=lambda: str(uuid7())
     )
 
-    # Firebase UID — unique identifier from Firebase Auth
     firebase_uid: Mapped[str] = mapped_column(
         String(128), unique=True, nullable=False, index=True
     )
 
-    # Basic profile (populated from Firebase token claims)
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     photo_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
@@ -49,6 +45,15 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         order_by="Memory.created_at.desc()",
+        lazy="select",
+    )
+
+    # One user → many chat sessions
+    chat_sessions: Mapped[List["ChatSession"]] = relationship(  # noqa: F821
+        "ChatSession",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="ChatSession.updated_at.desc()",
         lazy="select",
     )
 

@@ -1,7 +1,9 @@
 """
-core/database.py — SQLAlchemy async engine + session factory.
-Connects to the same PostgreSQL used by mem0 / pgvector.
+Database — async PostgreSQL via SQLAlchemy asyncpg.
+Shares the same PostgreSQL instance with the backend.
 """
+
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -12,13 +14,15 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from core.config import settings
+from app.config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_dsn() -> str:
     return (
-        f"postgresql+asyncpg://{settings.mem0_pg_user}:{settings.mem0_pg_password}"
-        f"@{settings.mem0_pg_host}:{settings.mem0_pg_port}/{settings.mem0_pg_db}"
+        f"postgresql+asyncpg://{settings.pg_user}:{settings.pg_password}"
+        f"@{settings.pg_host}:{settings.pg_port}/{settings.pg_db}"
     )
 
 
@@ -26,7 +30,7 @@ engine = create_async_engine(
     _build_dsn(),
     pool_size=10,
     max_overflow=20,
-    echo=False,          # set True to log SQL in dev
+    echo=False,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -37,20 +41,21 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 class Base(DeclarativeBase):
-    """Declarative base for all ORM models."""
+    """Declarative base for all file-service ORM models."""
     pass
 
 
 async def init_db() -> None:
-    """Create all tables (idempotent — does nothing if tables exist)."""
-    import models  # noqa: F401
+    """Create all tables (idempotent)."""
+    import app.models.document  # noqa: F401 — register models
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables initialized: %s:%s/%s", settings.pg_host, settings.pg_port, settings.pg_db)
 
 
 @asynccontextmanager
 async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
-    """Async context manager for DB sessions (use in non-FastAPI code)."""
+    """Async context manager for DB sessions."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

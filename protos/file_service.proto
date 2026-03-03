@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package fileservice;
+
+// ── File processing pipeline ─────────────────────────────────────────
+// Backend uploads file → file-service processes (MinIO + OCR + PageIndex)
+
+service FileService {
+  // Upload & process a document (MinIO → PaddleOCR → PageIndex → DB)
+  rpc ProcessDocument (ProcessDocumentRequest) returns (ProcessDocumentResponse);
+
+  // Get processing status
+  rpc GetDocumentStatus (GetDocumentStatusRequest) returns (GetDocumentStatusResponse);
+
+  // Delete a document (MinIO + DB cleanup)
+  rpc DeleteDocument (DeleteDocumentRequest) returns (DeleteDocumentResponse);
+}
+
+message ProcessDocumentRequest {
+  string file_name = 1;       // original filename
+  bytes  file_data = 2;       // raw file bytes
+  string user_id   = 3;       // owner user ID
+}
+
+message ProcessDocumentResponse {
+  string doc_id    = 1;       // UUID assigned to this document
+  string minio_key = 2;       // object key in MinIO
+  string status    = 3;       // "processing" | "completed" | "failed"
+  string message   = 4;       // human-readable status
+}
+
+message GetDocumentStatusRequest {
+  string doc_id = 1;
+}
+
+message GetDocumentStatusResponse {
+  string doc_id      = 1;
+  string status      = 2;    // "processing" | "completed" | "failed"
+  string file_name   = 3;
+  int32  node_count  = 4;    // number of indexed nodes
+  string message     = 5;
+}
+
+message DeleteDocumentRequest {
+  string doc_id = 1;
+}
+
+message DeleteDocumentResponse {
+  bool   success = 1;
+  string message = 2;
+}

@@ -66,3 +66,5 @@ class AgentState(MessagesState):
     
     # Mem0 memory
     mem0_user_id: str
+    
+    research_mode: bool
