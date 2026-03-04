@@ -4,10 +4,9 @@ import { useState, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useCoAgent,
-  useCoAgentStateRender,
   useCopilotAction,
 } from "@copilotkit/react-core";
-import { Progress } from "./Progress";
+
 import { EditResourceDialog } from "./EditResourceDialog";
 import { AddResourceDialog } from "./AddResourceDialog";
 import { Resources } from "./Resources";
@@ -26,14 +25,12 @@ export interface ResearchStateInfo {
 }
 
 interface ResearchCanvasProps {
-  /** Callback to notify parent when research state changes (for panel visibility + suggestions) */
   onStateChange?: (info: ResearchStateInfo) => void;
 }
 
 export function ResearchCanvas({ onStateChange }: ResearchCanvasProps) {
   const { model, agent } = useModelSelectorContext();
 
-  // Single source of truth for agent state - NO other useCoAgent should exist
   const { state, setState } = useCoAgent<AgentState>({
     name: agent,
     initialState: {
@@ -41,7 +38,6 @@ export function ResearchCanvas({ onStateChange }: ResearchCanvasProps) {
     },
   });
 
-  // Notify parent about state changes (for panel visibility + chat suggestions)
   useEffect(() => {
     const hasData =
       (state?.resources && state.resources.length > 0) ||
@@ -54,18 +50,6 @@ export function ResearchCanvas({ onStateChange }: ResearchCanvasProps) {
     });
   }, [state?.resources, state?.report, state?.research_question, onStateChange]);
 
-  // Render agent progress in CopilotChat (always active since component is always mounted)
-  useCoAgentStateRender({
-    name: agent,
-    render: ({ state, nodeName, status }) => {
-      if (!state.logs || state.logs.length === 0) {
-        return null;
-      }
-      return <Progress logs={state.logs} />;
-    },
-  });
-
-  // DeleteResources action - always registered since component is always mounted
   useCopilotAction({
     name: "DeleteResources",
     description:

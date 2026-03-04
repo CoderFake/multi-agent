@@ -13,6 +13,10 @@ import { CustomChatInput, ResearchModeContext, UploadedDoc } from '@/components/
 import { MemoryPanel } from '@/components/MemoryPanel';
 import { ChatHistory } from '@/components/ChatHistory';
 import { LoginPage } from '@/components/LoginPage';
+import { ExecutionPlanDisplay } from '@/components/ExecutionPlanDisplay';
+import { ThinkingDisplay } from '@/components/ThinkingDisplay';
+import { LogsDisplay } from '@/components/LogsDisplay';
+import { HITLApproval } from '@/components/HITLApproval';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -66,7 +70,14 @@ function ApprovalCard({ toolName, argsPreview, onApprove, onReject }: ApprovalCa
 }
 
 // ── Main Chat UI (rendered when authenticated) ───────────────────────
-function ChatContent({ token, researchMode, setResearchMode, refreshToken }: { token: string; researchMode: boolean; setResearchMode: (v: boolean) => void; refreshToken: (force?: boolean) => Promise<string | null> }) {
+function ChatContent({ token, researchMode, setResearchMode, refreshToken, uploadedDocs, setUploadedDocs }: {
+    token: string;
+    researchMode: boolean;
+    setResearchMode: (v: boolean) => void;
+    refreshToken: (force?: boolean) => Promise<string | null>;
+    uploadedDocs: UploadedDoc[];
+    setUploadedDocs: React.Dispatch<React.SetStateAction<UploadedDoc[]>>;
+}) {
     const { user, signOut } = useAuth();
     const [showSettings, setShowSettings] = useState(false);
     const [hasInteracted, setHasInteracted] = useState(false);
@@ -76,7 +87,6 @@ function ChatContent({ token, researchMode, setResearchMode, refreshToken }: { t
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
     const [chatKey, setChatKey] = useState(0);
     const [sidebarRefresh, setSidebarRefresh] = useState(0);
-    const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
     const [stateInfo, setStateInfo] = useState<ResearchStateInfo>({
         hasData: false,
         resourceCount: 0,
@@ -143,6 +153,10 @@ function ChatContent({ token, researchMode, setResearchMode, refreshToken }: { t
 
     return (
         <ResearchModeContext.Provider value={{ researchMode, setResearchMode, hasInteracted, setHasInteracted, uploadedDocs, setUploadedDocs }}>
+            <ThinkingDisplay />
+            <ExecutionPlanDisplay />
+            <LogsDisplay />
+            <HITLApproval />
             <div className="h-screen flex overflow-hidden">
                 {/* ── Left Sidebar (ChatGPT-style) ──────────────────────── */}
                 <div
@@ -275,15 +289,18 @@ export default function Home() {
     const { user, loading, getIdToken } = useAuth();
     const [token, setToken] = useState<string | null>(null);
     const [researchMode, setResearchMode] = useState(true);
+    const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
 
-    // Refresh token helper
+    const readyDocIds = uploadedDocs
+        .filter(d => d.status !== 'uploading' && d.status !== 'failed')
+        .map(d => d.doc_id);
+
     const refreshToken = useCallback(async (force = false) => {
         const t = await getIdToken(force);
         if (t) setToken(t);
         return t;
     }, [getIdToken]);
 
-    // Initial token fetch + periodic refresh every 10 minutes
     useEffect(() => {
         if (user) {
             refreshToken();
@@ -308,9 +325,16 @@ export default function Home() {
         <CopilotKit
             runtimeUrl="/api/copilotkit"
             showDevConsole={false}
-            properties={{ authorization: token, researchMode: researchMode }}
+            properties={{ authorization: token, researchMode: researchMode, uploadedDocIds: readyDocIds }}
         >
-            <ChatContent token={token} researchMode={researchMode} setResearchMode={setResearchMode} refreshToken={refreshToken} />
+            <ChatContent
+                token={token}
+                researchMode={researchMode}
+                setResearchMode={setResearchMode}
+                refreshToken={refreshToken}
+                uploadedDocs={uploadedDocs}
+                setUploadedDocs={setUploadedDocs}
+            />
         </CopilotKit>
     );
 }

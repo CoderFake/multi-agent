@@ -1,102 +1,79 @@
-"""Chat Node"""
+"""
+Chat Node — handles conversation, memory injection, and routing.
+
+Responsibilities:
+  - Build system prompt (memory + research context)
+  - Invoke LLM with research + MCP tools
+  - Route: Search → search_node, Delete → delete_node, MCP → mcp_tools, else → plan_node
+"""
 
 import asyncio
 import logging
-from typing import List, Literal, cast
+from typing import Literal, cast
 
-from copilotkit.langgraph import copilotkit_customize_config, copilotkit_emit_state
-from langchain.tools import tool
+from copilotkit.langgraph import copilotkit_customize_config
+from routes.agent.nodes.helpers.agui_helpers import emit_state
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from openai import RateLimitError
 
+from routes.agent.nodes.tools.chat_tools import (
+    Search, WriteReport, WriteResearchQuestion, DeleteResources,
+    truncate_resources,
+)
+from routes.agent.nodes.helpers.memory_helpers import search_user_memories, store_conversation_memory
 from routes.agent.nodes.download import get_resource
-from routes.agent.nodes.model import get_model
+from routes.agent.nodes.helpers.model import get_model
 from routes.agent.state import AgentState
 from core.config import settings
 from utils.prompt_loader import render_prompt
 
 logger = logging.getLogger(__name__)
 
-# Retry configuration
 MAX_RETRIES = 5
-INITIAL_BACKOFF = 1.0  # seconds
-MAX_BACKOFF = 60.0  # seconds
+INITIAL_BACKOFF = 1.0
+MAX_BACKOFF = 60.0
 BACKOFF_MULTIPLIER = 2.0
 
-# Lazy import memory service
-_memory_service = None
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _get_memory_service():
-    """Lazy import to avoid circular imports and heavy init at module load."""
-    global _memory_service
-    if _memory_service is None and settings.mem0_enabled:
-        try:
-            from services.memory_service import memory_service
-            _memory_service = memory_service
-        except Exception as e:
-            logger.warning("Failed to load memory service: %s", e)
-    return _memory_service
-
-
-@tool
-def Search(queries: List[str]):  # pylint: disable=invalid-name,unused-argument
-    """A list of one or more search queries to find good resources to support the research."""
-
-
-@tool
-def WriteReport(report: str):  # pylint: disable=invalid-name,unused-argument
-    """Write the research report."""
-
-
-@tool
-def WriteResearchQuestion(research_question: str):  # pylint: disable=invalid-name,unused-argument
-    """Write the research question."""
-
-
-@tool
-def DeleteResources(urls: List[str]):  # pylint: disable=invalid-name,unused-argument
-    """Delete the URLs from the resources."""
-
-
-def _truncate_resources(resources: List[dict], max_chars: int = 15000) -> List[dict]:
+def _sanitize_messages(messages: list) -> list:
     """
-    Truncate resource content to prevent exceeding token limits.
-    
-    Args:
-        resources: List of resource dictionaries with content
-        max_chars: Maximum total characters for all resources
-        
-    Returns:
-        List of resources with potentially truncated content
+    1. Deduplicate ToolMessages by tool_call_id — keeps first occurrence.
+       (ag_ui replays history on every turn, causing duplicates in state.)
+    2. Drop ToolMessages not immediately preceded by an AIMessage with matching tool_calls.
+       (OpenAI 400: tool message must follow tool_calls.)
     """
-    if not resources:
-        return resources
-    
-    total_chars = sum(len(r.get("content", "")) for r in resources)
-    
-    if total_chars <= max_chars:
-        return resources
-    
-    # Calculate per-resource limit
-    chars_per_resource = max_chars // len(resources)
-    truncated = []
-    
-    for resource in resources:
-        content = resource.get("content", "")
-        if len(content) > chars_per_resource:
-            truncated_content = content[:chars_per_resource] + "\n... [content truncated due to length]"
-            truncated.append({**resource, "content": truncated_content})
-            logger.warning(
-                "Truncated resource content from %d to %d chars: %s",
-                len(content), chars_per_resource, resource.get("url", "unknown")
-            )
-        else:
-            truncated.append(resource)
-    
-    return truncated
+    # Step 1: deduplicate ToolMessages by tool_call_id
+    seen_call_ids: set = set()
+    deduped: list = []
+    for msg in messages:
+        if getattr(msg, "type", None) == "tool":
+            cid = getattr(msg, "tool_call_id", None)
+            if cid in seen_call_ids:
+                continue
+            seen_call_ids.add(cid)
+        deduped.append(msg)
+
+    # Step 2: consecutive-pair check
+    result: list = []
+    for msg in deduped:
+        if getattr(msg, "type", None) == "tool":
+            call_id = getattr(msg, "tool_call_id", None)
+            if not result:
+                continue
+            prev = result[-1]
+            prev_ids = {
+                (tc["id"] if isinstance(tc, dict) else tc.id)
+                for tc in (getattr(prev, "tool_calls", None) or [])
+            }
+            if call_id not in prev_ids:
+                logger.debug("Dropping orphaned ToolMessage tool_call_id=%s", call_id)
+                continue
+        result.append(msg)
+    return result
 
 
 async def _invoke_with_retry(
@@ -106,239 +83,135 @@ async def _invoke_with_retry(
     config: RunnableConfig,
     ainvoke_kwargs: dict,
 ) -> AIMessage:
-    """
-    Invoke model with exponential backoff retry for rate limit errors.
-    """
+    """Invoke model with exponential-backoff retry on rate limit errors."""
     backoff = INITIAL_BACKOFF
-    last_error = None
-    
+    last_err = None
+
     for attempt in range(MAX_RETRIES):
         try:
-            response = await model.bind_tools(
-                tools,
-                **ainvoke_kwargs,
-            ).ainvoke(messages, config)
-            
-            if attempt > 0:
-                logger.info("Request succeeded after %d retries", attempt)
-            
-            return response
-            
-        except RateLimitError as e:
-            last_error = e
-            error_msg = str(e)
-            
-            # Check if it's a token limit error (request too large)
-            if "tokens" in error_msg.lower() and "requested" in error_msg.lower():
-                logger.error(
-                    "Token limit exceeded - request is too large. "
-                    "Consider reducing context or message history. Error: %s",
-                    error_msg
-                )
+            return await model.bind_tools(tools, **ainvoke_kwargs).ainvoke(messages, config)
+        except RateLimitError as exc:
+            last_err = exc
+            if "tokens" in str(exc).lower() and "requested" in str(exc).lower():
+                logger.error("Token limit exceeded (request too large): %s", exc)
                 raise
-            
-            # For TPM/RPM rate limits, retry with backoff
             if attempt < MAX_RETRIES - 1:
-                logger.warning(
-                    "Rate limit hit (attempt %d/%d). Retrying in %.1f seconds. Error: %s",
-                    attempt + 1, MAX_RETRIES, backoff, error_msg
-                )
+                logger.warning("Rate limit (attempt %d/%d), retry in %.1fs", attempt + 1, MAX_RETRIES, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * BACKOFF_MULTIPLIER, MAX_BACKOFF)
             else:
-                logger.error(
-                    "Rate limit exceeded after %d retries. Error: %s",
-                    MAX_RETRIES, error_msg
-                )
+                logger.error("Rate limit after %d retries: %s", MAX_RETRIES, exc)
                 raise
-                
-        except Exception as e:
-            logger.error("Unexpected error during model invocation: %s", str(e))
+        except Exception as exc:
+            logger.error("Unexpected model error: %s", exc)
             raise
-    
-    raise last_error
+
+    raise last_err
 
 
-async def _search_user_memories(user_message: str, user_id: str) -> str:
-    """Search mem0 for relevant memories with a timeout to avoid blocking chat."""
-    mem_svc = _get_memory_service()
-    if not mem_svc:
-        return ""
-
-    try:
-        memories = await asyncio.wait_for(
-            mem_svc.search_memories(query=user_message, user_id=user_id, limit=3),
-            timeout=3.0,
-        )
-        if not memories:
-            return ""
-
-        lines = []
-        for m in memories:
-            memory_text = m.get("memory", "") if isinstance(m, dict) else str(m)
-            if memory_text:
-                lines.append(f"- {memory_text}")
-
-        if lines:
-            return "User Memories (from previous conversations):\n" + "\n".join(lines)
-    except asyncio.TimeoutError:
-        logger.warning("Memory search timed out (3s), skipping")
-    except Exception as e:
-        logger.warning("Error searching memories: %s", e)
-
-    return ""
-
-
-async def _store_conversation_memory(
-    user_message: str, ai_response: str, user_id: str
-):
-    """Store user+assistant exchange in mem0 (fire-and-forget)."""
-    mem_svc = _get_memory_service()
-    if not mem_svc:
-        return
-
-    try:
-        interaction = [
-            {"role": "user", "content": user_message},
-            {"role": "assistant", "content": ai_response},
-        ]
-        await mem_svc.add_memory(interaction, user_id=user_id)
-    except Exception as e:
-        logger.warning("Error storing memory: %s", e)
-
+# ── chat_node ─────────────────────────────────────────────────────────────────
 
 async def chat_node(
-    state: AgentState, 
+    state: AgentState,
     config: RunnableConfig,
-    mcp_tools: list = None
-) -> Command[Literal["search_node", "chat_node", "delete_node", "mcp_tools", "__end__"]]:
+    mcp_tools: list = None,
+) -> Command[Literal["search_node", "chat_node", "delete_node", "mcp_tools", "plan_node", "__end__"]]:
     """
-    Chat Node - handles conversation and tool routing.
-    Now includes MCP tools and Mem0 memory integration.
+    Main chat node.
+    1. Fetch resources + search memories (parallel)
+    2. Build system prompt
+    3. Invoke LLM
+    4. Handle tool routing (Write* → immediate ToolMessage + loop, else → routing)
     """
+    mcp_tools = mcp_tools or []
 
-    # Emit thinking state
-    state["logs"] = state.get("logs", [])
-    state["logs"].append({"message": "Processing your request...", "done": False})
-    await copilotkit_emit_state(config, state)
+    state["logs"] = [{"message": "Processing your request...", "done": False}]
+    state["execution_plan"] = []
+    await emit_state(config, state)
 
     config = copilotkit_customize_config(
         config,
         emit_intermediate_state=[
-            {
-                "state_key": "report",
-                "tool": "WriteReport",
-                "tool_argument": "report",
-            },
-            {
-                "state_key": "research_question",
-                "tool": "WriteResearchQuestion",
-                "tool_argument": "research_question",
-            },
+            {"state_key": "report", "tool": "WriteReport", "tool_argument": "report"},
+            {"state_key": "research_question", "tool": "WriteResearchQuestion", "tool_argument": "research_question"},
         ],
     )
 
-    state["resources"] = state.get("resources", [])
-    research_question = state.get("research_question", "")
-    report = state.get("report", "")
-
-    # --- Extract last user message early (needed for memory search) ---
+    # --- Last user message (for memory) ---
     user_id = state.get("mem0_user_id")
     last_user_msg = ""
     for msg in reversed(state.get("messages", [])):
-        if hasattr(msg, "type") and msg.type == "human":
+        if getattr(msg, "type", None) == "human":
             last_user_msg = msg.content
             break
-        elif isinstance(msg, dict) and msg.get("role") == "user":
+        if isinstance(msg, dict) and msg.get("role") == "user":
             last_user_msg = msg.get("content", "")
             break
 
-    # --- Start memory search in parallel with resource processing ---
+    # --- Start memory search in parallel with resource fetch ---
     memory_task = None
     if last_user_msg and settings.mem0_enabled and user_id:
-        memory_task = asyncio.create_task(
-            _search_user_memories(last_user_msg, user_id)
-        )
+        memory_task = asyncio.create_task(search_user_memories(last_user_msg, user_id))
 
+    # --- Fetch + truncate resources ---
     resources = []
+    for r in state.get("resources", []):
+        content = get_resource(r["url"])
+        if content != "ERROR":
+            resources.append({**r, "content": content})
+    resources = truncate_resources(resources, max_chars=15000)
 
-    for resource in state["resources"]:
-        content = get_resource(resource["url"])
-        if content == "ERROR":
-            continue
-        resources.append({**resource, "content": content})
-
+    # --- Model setup ---
     model = get_model(state)
     ainvoke_kwargs = {}
-    if model.__class__.__name__ in ["ChatOpenAI"]:
+    if model.__class__.__name__ == "ChatOpenAI":
         ainvoke_kwargs["parallel_tool_calls"] = False
-    all_tools = [
-        Search,
-        WriteReport,
-        WriteResearchQuestion,
-        DeleteResources,
-    ]
-    
-    has_resources = len(resources) > 0
-    has_report = report and len(report.strip()) > 0
-    
-    if mcp_tools and (has_resources or has_report):
+
+    research_question = state.get("research_question", "")
+    report = state.get("report", "")
+
+    all_tools = [Search, WriteReport, WriteResearchQuestion, DeleteResources]
+    if mcp_tools and (resources or report):
         all_tools.extend(mcp_tools)
-    
-    # Truncate resources if too large
-    truncated_resources = _truncate_resources(resources, max_chars=15000)
 
-    # --- Mem0: await memory search result (was started earlier in parallel) ---
+    # --- Await memory ---
     if not user_id:
-        logger.warning("No mem0_user_id in state — skipping memory operations")
-
-    memories_context = ""
-    if memory_task:
-        memories_context = await memory_task
-        if memories_context:
-            logger.info("Injected %d chars of memory context", len(memories_context))
-
-    instructions_section = ""
+        logger.warning("No mem0_user_id — skipping memory")
+    memories_context = await memory_task if memory_task else ""
     if memories_context:
-        instructions_section = render_prompt(
-            "memory_instructions",
-            memories=memories_context,
-        )
+        logger.info("Injected %d chars of memory context", len(memories_context))
+
+    # --- Build system prompt ---
+    instructions_section = (
+        render_prompt("memory_instructions", memories=memories_context)
+        if memories_context else ""
+    )
 
     research_context_parts = []
     if research_question:
         research_context_parts.append(f"Research question: {research_question}")
     if report:
         research_context_parts.append(f"Current report: {report}")
-    if truncated_resources:
-        research_context_parts.append(f"Available resources: {truncated_resources}")
-    research_context = "\n".join(research_context_parts)
+    if resources:
+        research_context_parts.append(f"Available resources: {resources}")
 
     research_mode = state.get("research_mode", False)
-    if research_mode:
-        research_mode_instruction = (
-            "Research mode is ENABLED. You MUST use the Search tool to find up-to-date information "
-            "from the web BEFORE answering ANY question. Always search first, then synthesize the results."
-        )
-    else:
-        research_mode_instruction = (
-            "Only activate when the user explicitly asks for research, a report, or deep investigation. "
-            "Do NOT search if the user is just chatting."
-        )
+    research_mode_instruction = (
+        "Research mode is ENABLED. Use Search BEFORE answering ANY question."
+        if research_mode
+        else "Only activate search when the user explicitly requests research or a report."
+    )
 
     system_content = render_prompt(
         "system",
         instructions_section=instructions_section,
-        research_context=research_context,
+        research_context="\n".join(research_context_parts),
         research_mode_instruction=research_mode_instruction,
     )
 
-    messages = [
-        SystemMessage(content=system_content),
-        *state["messages"],
-    ]
+    messages = [SystemMessage(content=system_content), *_sanitize_messages(state["messages"])]
 
-    
+    # --- LLM call ---
     response = await _invoke_with_retry(
         model=model,
         tools=all_tools,
@@ -348,95 +221,76 @@ async def chat_node(
     )
 
     state["logs"] = []
-    await copilotkit_emit_state(config, state)
+    await emit_state(config, state)
 
     ai_message = cast(AIMessage, response)
 
-    # --- Mem0: Store conversation in memory (fire-and-forget) ---
+    # --- Store memory (fire-and-forget) ---
     if settings.mem0_enabled and last_user_msg and len(last_user_msg.strip()) > 10:
         ai_content = ai_message.content or ""
         if not ai_content and ai_message.tool_calls:
-            tool_info = ai_message.tool_calls[0]
-            tool_args = tool_info.get("args", {})
-            if tool_info["name"] == "WriteReport":
-                ai_content = tool_args.get("report", "")[:500]
-            elif tool_info["name"] == "WriteResearchQuestion":
-                ai_content = f"Research question: {tool_args.get('research_question', '')}"
+            tc = ai_message.tool_calls[0]
+            args = tc.get("args", {})
+            if tc["name"] == "WriteReport":
+                ai_content = args.get("report", "")[:500]
+            elif tc["name"] == "WriteResearchQuestion":
+                ai_content = f"Research question: {args.get('research_question', '')}"
             else:
-                ai_content = f"Used tool: {tool_info['name']}"
-
+                ai_content = f"Used tool: {tc['name']}"
         if ai_content:
-            asyncio.create_task(
-                _store_conversation_memory(last_user_msg, ai_content, user_id)
-            )
+            asyncio.create_task(store_conversation_memory(last_user_msg, ai_content, user_id))
 
+    # --- Handle Write* tools immediately (loop back) ---
     if ai_message.tool_calls:
         tool_name = ai_message.tool_calls[0]["name"]
-        
-        if tool_name == "Search":
-            state["logs"].append({"message": "Preparing to search...", "done": False})
-        elif tool_name == "WriteReport":
-            state["logs"].append({"message": "Writing research report...", "done": False})
-        elif tool_name == "WriteResearchQuestion":
-            state["logs"].append({"message": "Setting research question...", "done": False})
-        elif tool_name == "DeleteResources":
-            state["logs"].append({"message": "Preparing resource deletion...", "done": False})
-        else:
-            state["logs"].append({"message": f"Executing {tool_name}...", "done": False})
-        await copilotkit_emit_state(config, state)
+        tool_id = ai_message.tool_calls[0]["id"]
 
         if tool_name == "WriteReport":
-            report = ai_message.tool_calls[0]["args"].get("report", "")
+            report_text = ai_message.tool_calls[0]["args"].get("report", "")
             state["logs"] = []
-            await copilotkit_emit_state(config, state)
+            await emit_state(config, state)
             return Command(
                 goto="chat_node",
                 update={
-                    "report": report,
+                    "report": report_text,
                     "logs": [],
-                    "messages": [
-                        ai_message,
-                        ToolMessage(
-                            tool_call_id=ai_message.tool_calls[0]["id"],
-                            content="Report written.",
-                        ),
-                    ],
+                    "messages": [ai_message, ToolMessage(tool_call_id=tool_id, content="Report written.")],
                 },
             )
+
         if tool_name == "WriteResearchQuestion":
             state["logs"] = []
-            await copilotkit_emit_state(config, state)
+            await emit_state(config, state)
             return Command(
                 goto="chat_node",
                 update={
-                    "research_question": ai_message.tool_calls[0]["args"][
-                        "research_question"
-                    ],
+                    "research_question": ai_message.tool_calls[0]["args"]["research_question"],
                     "logs": [],
-                    "messages": [
-                        ai_message,
-                        ToolMessage(
-                            tool_call_id=ai_message.tool_calls[0]["id"],
-                            content="Research question written.",
-                        ),
-                    ],
+                    "messages": [ai_message, ToolMessage(tool_call_id=tool_id, content="Research question set.")],
                 },
             )
 
-    # Clear logs before final routing
-    state["logs"] = []
-    await copilotkit_emit_state(config, state)
+        # Log other tool execution
+        log_label = {
+            "Search": "Preparing to search...",
+            "DeleteResources": "Preparing resource deletion...",
+        }.get(tool_name, f"Executing {tool_name}...")
+        state["logs"].append({"message": log_label, "done": False})
+        await emit_state(config, state)
 
-    goto = "__end__"
+    state["logs"] = []
+    await emit_state(config, state)
+
+    # --- Route ---
+    goto: str = "__end__"
     if ai_message.tool_calls:
         tool_name = ai_message.tool_calls[0]["name"]
         if tool_name == "Search":
             goto = "search_node"
         elif tool_name == "DeleteResources":
             goto = "delete_node"
-        elif tool_name not in ["WriteReport", "WriteResearchQuestion"]:
+        elif tool_name not in ("WriteReport", "WriteResearchQuestion"):
             goto = "mcp_tools"
 
     return Command(goto=goto, update={"messages": response, "logs": []})
-
 

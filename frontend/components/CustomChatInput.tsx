@@ -122,21 +122,21 @@ export const CustomChatInput: React.FC<InputProps> = ({
 
   return (
     <div className="copilotKitInputContainer">
-      {/* File chips above input */}
-      {uploadedDocs.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pt-2">
-          {uploadedDocs.map(doc => (
-            <FileUploadChip key={doc.doc_id} doc={doc} onRemove={removeDoc} />
-          ))}
-        </div>
-      )}
-
       <div className="copilotKitInput" onClick={(e) => {
         const target = e.target as HTMLElement;
         if (!target.closest('button') && target.tagName !== 'TEXTAREA') {
           textareaRef.current?.focus();
         }
       }}>
+        {/* File chips — inside the input box, above textarea */}
+        {uploadedDocs.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-2">
+            {uploadedDocs.map(doc => (
+              <FileUploadChip key={doc.doc_id} doc={doc} onRemove={removeDoc} />
+            ))}
+          </div>
+        )}
+
         <textarea
           ref={textareaRef}
           placeholder={context.labels.placeholder}

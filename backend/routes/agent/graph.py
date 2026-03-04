@@ -28,8 +28,9 @@ from routes.agent.nodes.chat import chat_node
 from routes.agent.nodes.search import search_node
 from routes.agent.nodes.download import download_node
 from routes.agent.nodes.delete import delete_node, perform_delete_node
-from routes.agent.nodes.mcp_tools import mcp_tools_node
-from routes.agent.nodes.document_tools import document_node, knowledge_node
+from routes.agent.nodes.tools.mcp_tools import mcp_tools_node
+from routes.agent.nodes.tools.document_tools import document_node, knowledge_node
+from routes.agent.nodes.plan import make_plan_node
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +64,17 @@ def _build_mcp_connections(mcps) -> Dict[str, Any]:
 async def _load_mcp_tools():
     all_tools: List = []
     tool_to_mcp_id: Dict[str, str] = {}
+    tool_map: Dict[str, Any] = {} 
 
     try:
         mcps = await mcp_manager.list_mcps()
         if not mcps:
             logger.info("No MCP servers configured")
-            return [], {}
+            return [], {}, {}
 
         connections = _build_mcp_connections(mcps)
         if not connections:
-            return [], {}
+            return [], {}, {}
 
         name_to_id = {mcp.name: mcp.id for mcp in mcps}
         client = MultiServerMCPClient(connections)
@@ -88,17 +90,18 @@ async def _load_mcp_tools():
                 mcp_id = name_to_id.get(server_name)
                 for tool in server_tools:
                     all_tools.append(tool)
+                    tool_map[tool.name] = tool  
                     if mcp_id:
                         tool_to_mcp_id[tool.name] = mcp_id
             except Exception:
                 logger.exception("Failed to load tools from MCP server '%s'", server_name)
 
         logger.info("Loaded %d MCP tools from %d servers", len(all_tools), len(connections))
-        return all_tools, tool_to_mcp_id
+        return all_tools, tool_to_mcp_id, tool_map
 
     except Exception:
         logger.exception("Error loading MCP tools")
-        return [], {}
+        return [], {}, {}
 
 
 # ── Conditional routing ────────────────────────────────────────────────
@@ -106,21 +109,30 @@ async def _load_mcp_tools():
 def _route_from_chat(state: AgentState) -> str:
     """
     After chat_node:
-      - if last message has tool_calls → MCP tools
-      - if uploaded_doc_ids → document_node
-      - else → END
+      - pending_approval + user said 'approved' → plan_node (resume HITL)
+      - tool_calls → appropriate tool node
+      - uploaded_doc_ids → document_node
+      - else → __end__
     """
     messages = state.get("messages", [])
     if not messages:
         return "__end__"
 
     last = messages[-1]
+    last_content = ""
+    if hasattr(last, "content"):
+        last_content = (last.content or "").strip().lower()
+    elif isinstance(last, dict):
+        last_content = (last.get("content") or "").strip().lower()
 
-    # Check for MCP tool calls
+    if state.get("pending_approval") and state.get("execution_plan"):
+        if last_content in ("approved", "yes", "approve", "ok", "confirm",
+                             "rejected", "reject", "no", "deny", "cancel"):
+            return "plan_node"
+
     if hasattr(last, "tool_calls") and last.tool_calls:
         return "mcp_tools"
 
-    # Check for document retrieval need
     if state.get("uploaded_doc_ids"):
         return "document_node"
 
@@ -133,10 +145,10 @@ def _route_from_document(state: AgentState) -> str:
 
 
 def _route_from_knowledge(state: AgentState) -> str:
-    """After knowledge_node → search_node if research_mode, else chat_node for synthesis."""
+    """After knowledge_node → search_node if research_mode, else plan_node."""
     if state.get("research_mode", False):
         return "search_node"
-    return "chat_node"
+    return "plan_node"
 
 
 # ── Graph construction ─────────────────────────────────────────────────
@@ -146,7 +158,7 @@ async def create_agent_graph():
     Create agent graph: research-canvas + MCP tools + Document Intelligence pipeline.
     """
     logger.info("Creating agent graph…")
-    mcp_tools, tool_to_mcp_id = await _load_mcp_tools()
+    mcp_tools, tool_to_mcp_id, tool_map = await _load_mcp_tools()
 
     workflow = StateGraph(AgentState)
 
@@ -156,28 +168,30 @@ async def create_agent_graph():
     workflow.add_node("document_node", document_node)
     workflow.add_node("knowledge_node", knowledge_node)
     workflow.add_node("search_node", search_node)
+    workflow.add_node("plan_node", make_plan_node(mcp_tools))
     workflow.add_node("delete_node", delete_node)
     workflow.add_node("perform_delete_node", perform_delete_node)
     workflow.add_node("mcp_tools", partial(
         mcp_tools_node,
-        mcp_manager=mcp_manager,
-        tool_to_mcp_id=tool_to_mcp_id,
+        tool_map=tool_map,
     ))
 
     # ── Edges ────────────────────────────────────────────────────────
     workflow.set_entry_point("download")
     workflow.add_edge("download", "chat_node")
 
-    # chat_node → conditional: MCP tools | document_node | __end__
+    # chat_node → conditional: plan resume | MCP tools | document_node | __end__
     workflow.add_conditional_edges(
         "chat_node",
         _route_from_chat,
         {
+            "plan_node": "plan_node",
             "mcp_tools": "mcp_tools",
             "document_node": "document_node",
             "__end__": "__end__",
         },
     )
+
 
     # document_node → knowledge_node
     workflow.add_conditional_edges(
@@ -186,18 +200,16 @@ async def create_agent_graph():
         {"knowledge_node": "knowledge_node"},
     )
 
-    # knowledge_node → search_node | chat_node (synthesis)
     workflow.add_conditional_edges(
         "knowledge_node",
         _route_from_knowledge,
         {
             "search_node": "search_node",
-            "chat_node": "chat_node",
+            "plan_node": "plan_node",
         },
     )
 
-    # search_node loops back through download (to refresh resources) → chat_node
-    workflow.add_edge("search_node", "download")
+    workflow.add_edge("search_node", "plan_node")
     workflow.add_edge("delete_node", "perform_delete_node")
     workflow.add_edge("perform_delete_node", "chat_node")
     workflow.add_edge("mcp_tools", "chat_node")

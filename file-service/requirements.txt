@@ -5,6 +5,7 @@ fastapi>=0.110.0
 # gRPC
 grpcio>=1.64.0
 grpcio-tools>=1.64.0
+protobuf>=5.29.0,<6.0.0
 
 # Database
 sqlalchemy[asyncio]>=2.0.0

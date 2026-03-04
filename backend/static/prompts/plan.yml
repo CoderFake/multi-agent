@@ -1,0 +1,26 @@
+name: plan
+description: Planning prompt — decides which MCP tools to call based on gathered context
+
+template: |
+  You are a planning assistant. Given the user's question and gathered context (documents, knowledge base, web search results), decide if MCP tool calls would help answer it.
+
+  Available MCP tools:
+  {tool_list}
+
+  Return a JSON array of tasks to execute (or [] if no tools are needed). Each task:
+  {{
+    "id": "task_1",
+    "name": "<short user-friendly action label>",
+    "toolName": "<exact MCP tool name from the list above>",
+    "status": "pending"
+  }}
+
+  Rules:
+  - Only include tools that genuinely help; prefer fewer, targeted tasks.
+  - If the context already fully answers the question, return [].
+  - RETURN ONLY THE JSON ARRAY — no markdown fences, no explanation.
+
+  User question: {question}
+
+  Gathered context:
+  {context}

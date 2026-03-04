@@ -79,9 +79,25 @@ function McpImporter({ onMCPImported }: { onMCPImported: (mcp: MCPConfig) => voi
     const handleJSONSubmit = async () => {
         setLoading(true); setError(''); setSuccess('');
         try {
-            const mcp = await api.importMCP({ protocol, config: JSON.parse(jsonInput) });
-            setSuccess(`MCP "${mcp.name}" imported successfully!`);
-            onMCPImported(mcp);
+            const parsed = JSON.parse(jsonInput);
+
+            if (parsed.mcpServers && typeof parsed.mcpServers === 'object') {
+                const entries = Object.entries(parsed.mcpServers) as [string, any][];
+                const results: MCPConfig[] = [];
+                for (const [serverName, cfg] of entries) {
+                    const mcp = await api.importMCP({
+                        protocol: cfg.url ? 'sse' : 'stdio',
+                        config: { name: serverName, ...cfg },
+                    });
+                    results.push(mcp);
+                    onMCPImported(mcp);
+                }
+                setSuccess(`Imported ${results.length} MCP server${results.length !== 1 ? 's' : ''}: ${results.map(m => m.name).join(', ')}`);
+            } else {
+                const mcp = await api.importMCP({ protocol, config: parsed });
+                setSuccess(`MCP "${mcp.name}" imported successfully!`);
+                onMCPImported(mcp);
+            }
             setJsonInput('');
         } catch (e: any) {
             setError(e.message || 'Failed to import MCP');

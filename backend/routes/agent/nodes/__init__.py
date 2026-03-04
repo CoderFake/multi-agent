@@ -7,8 +7,8 @@ from .chat import chat_node
 from .search import search_node
 from .download import download_node, get_resource
 from .delete import delete_node, perform_delete_node
-from .mcp_tools import mcp_tools_node
-from .model import get_model
+from .tools.mcp_tools import mcp_tools_node
+from .helpers.model import get_model
 
 __all__ = [
     'chat_node',

@@ -6,14 +6,15 @@ import asyncio
 import os
 from typing import Any, Dict, List, cast
 
-from copilotkit.langgraph import copilotkit_customize_config, copilotkit_emit_state
+from copilotkit.langgraph import copilotkit_customize_config
+from routes.agent.nodes.helpers.agui_helpers import emit_state
 from langchain.tools import tool
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from tavily import TavilyClient
 
-from routes.agent.nodes.model import get_model
+from routes.agent.nodes.helpers.model import get_model
 from routes.agent.state import AgentState
 
 
@@ -71,7 +72,7 @@ async def search_node(state: AgentState, config: RunnableConfig):
     for query in queries:
         state["logs"].append({"message": f"Search for {query}", "done": False})
 
-    await copilotkit_emit_state(config, state)
+    await emit_state(config, state)
 
     search_results = []
 
@@ -87,7 +88,7 @@ async def search_node(state: AgentState, config: RunnableConfig):
             search_results.append(result)
 
         state["logs"][i]["done"] = True
-        await copilotkit_emit_state(config, state)
+        await emit_state(config, state)
 
     config = copilotkit_customize_config(
         config,
@@ -128,6 +129,19 @@ async def search_node(state: AgentState, config: RunnableConfig):
     if model.__class__.__name__ in ["ChatOpenAI"]:
         ainvoke_kwargs["parallel_tool_calls"] = False
 
+    def _sanitize_messages(msgs):
+        valid_tool_call_ids = set()
+        for msg in msgs:
+            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    valid_tool_call_ids.add(tc.get("id") or tc.get("tool_call_id"))
+        return [
+            msg for msg in msgs
+            if not isinstance(msg, ToolMessage) or msg.tool_call_id in valid_tool_call_ids
+        ]
+
+    safe_messages = _sanitize_messages(state["messages"])
+
     # figure out which resources to use
     response = await model.bind_tools(
         [ExtractResources], tool_choice="ExtractResources", **ainvoke_kwargs
@@ -138,7 +152,7 @@ async def search_node(state: AgentState, config: RunnableConfig):
             You need to extract the 3-5 most relevant resources from the following search results.
             """
             ),
-            *state["messages"],
+            *safe_messages,
             ToolMessage(
                 tool_call_id=ai_message.tool_calls[0]["id"],
                 content=f"Performed search: {truncated_results}",
@@ -148,7 +162,7 @@ async def search_node(state: AgentState, config: RunnableConfig):
     )
 
     state["logs"] = []
-    await copilotkit_emit_state(config, state)
+    await emit_state(config, state)
 
     ai_message_response = cast(AIMessage, response)
     resources = ai_message_response.tool_calls[0]["args"]["resources"]

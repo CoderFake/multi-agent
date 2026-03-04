@@ -1,8 +1,26 @@
 import json
 import asyncio
+import sys
+from contextlib import asynccontextmanager
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 import uuid
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as _asyncio_timeout
+else:
+    @asynccontextmanager
+    async def _asyncio_timeout(delay): 
+        """Thin shim: converts asyncio.wait_for semantics to a context manager."""
+        task = asyncio.current_task()
+        handle = asyncio.get_event_loop().call_later(delay, task.cancel)
+        try:
+            yield
+        except asyncio.CancelledError:
+            raise asyncio.TimeoutError from None
+        finally:
+            handle.cancel()
+
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -109,22 +127,20 @@ class MCPManager:
             protocol = mcp_config.protocol
             
             if protocol == "stdio":
-                async with asyncio.timeout(60):
-                    server_params = StdioServerParameters(
-                        command=mcp_config.config["command"],
-                        args=mcp_config.config["args"],
-                        env=mcp_config.config.get("env")
-                    )
-                    
-                    print(f"Connecting to stdio MCP: {mcp_config.config['command']} {' '.join(mcp_config.config['args'])}")
-                    
+                server_params = StdioServerParameters(
+                    command=mcp_config.config["command"],
+                    args=mcp_config.config["args"],
+                    env=mcp_config.config.get("env")
+                )
+
+                print(f"Connecting to stdio MCP: {mcp_config.config['command']} {' '.join(mcp_config.config['args'])}")
+
+                async def _load_stdio():
                     async with stdio_client(server_params) as (read, write):
                         async with ClientSession(read, write) as session:
                             await session.initialize()
                             tools_result = await session.list_tools()
-                            
                             print(f"Successfully connected! Found {len(tools_result.tools)} tools")
-                            
                             mcp_config.tools = [
                                 {
                                     "name": tool.name,
@@ -133,26 +149,25 @@ class MCPManager:
                                 }
                                 for tool in tools_result.tools
                             ]
-                            
                             await self._save_mcp_config(mcp_config)
+
+                await asyncio.wait_for(_load_stdio(), timeout=60)
                             
             elif protocol == "sse" or protocol == "http":
                 from services.sse_transport import SSEMCPSession
-                
-                async with asyncio.timeout(60):
-                    print(f"Connecting to SSE/HTTP MCP: {mcp_config.config['url']}")
-                    
-                    session = SSEMCPSession(
-                        url=mcp_config.config["url"],
-                        headers=mcp_config.config.get("headers")
-                    )
-                    
+
+                print(f"Connecting to SSE/HTTP MCP: {mcp_config.config['url']}")
+
+                session = SSEMCPSession(
+                    url=mcp_config.config["url"],
+                    headers=mcp_config.config.get("headers")
+                )
+
+                async def _load_sse():
                     try:
                         await session.initialize()
                         tools_result = await session.list_tools()
-                        
                         print(f"Successfully connected! Found {len(tools_result.tools)} tools")
-                        
                         mcp_config.tools = [
                             {
                                 "name": tool.name,
@@ -161,10 +176,11 @@ class MCPManager:
                             }
                             for tool in tools_result.tools
                         ]
-                        
                         await self._save_mcp_config(mcp_config)
                     finally:
                         await session.close()
+
+                await asyncio.wait_for(_load_sse(), timeout=60)
                         
         except asyncio.TimeoutError:
             print(f"ERROR: Connection timeout for MCP {mcp_config.name}")
@@ -174,7 +190,6 @@ class MCPManager:
             import traceback
             traceback.print_exc()
             mcp_config.tools = []
-
 
     async def import_mcp(self, mcp_json: Dict[str, Any]) -> MCPConfig:
         """

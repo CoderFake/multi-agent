@@ -1,30 +1,34 @@
 """
 Document MCP Tools Node — ChatSessionDocument + Knowledge
 
-Two HITL-gated tools integrated as LangGraph nodes:
+Two nodes integrated as LangGraph nodes:
 
-  1. ChatSessionDocument:
+  1. document_node:
      – PageIndex reasoning over a specific document the user uploaded
      – Returns answer + per-section citations (table/figure/formula)
+     – Triggered when uploaded_doc_ids is non-empty
 
-  2. Knowledge:
+  2. knowledge_node:
      – Milvus semantic search across all user's indexed knowledge base
      – Returns relevant chunks + citations with section images
+     – Triggered when research_mode=True
 
-Both tools follow the same HITL pattern as mcp_tools_node:
-  interrupt() → user Approve/Reject → execute → Command(goto=next_node)
+HITL pattern:
+  graph.compile(interrupt_before=["document_node", "knowledge_node"])
+  → graph pauses BEFORE each node; frontend shows ApprovalCard
+  → on approve: graph.invoke(Command(resume=...)) → node executes
+  → on reject: node is skipped (graph routes to next via Command)
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Literal
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command, interrupt
-from copilotkit.langgraph import copilotkit_emit_state
+from langgraph.types import Command
+from routes.agent.nodes.helpers.agui_helpers import emit_state
 
 from core.grpc_client import file_service_client, CitationItem
 from routes.agent.state import AgentState
@@ -69,58 +73,47 @@ def _format_knowledge_chunks(chunks) -> tuple[str, str]:
     return context, citations
 
 
+def _latest_user_question(state: AgentState) -> str:
+    """Extract the most recent user message text."""
+    for msg in reversed(state.get("messages", [])):
+        if (
+            hasattr(msg, "content")
+            and isinstance(msg.content, str)
+            and msg.content.strip()
+            and not getattr(msg, "tool_calls", None)
+        ):
+            return msg.content
+    return ""
+
+
 # ── Node 1: document_node ─────────────────────────────────────────────
 
 async def document_node(
     state: AgentState,
     config: RunnableConfig,
-) -> Command[Literal["knowledge_node", "chat_node"]]:
+) -> Command[Literal["knowledge_node"]]:
     """
     PageIndex reasoning retrieval for user-uploaded documents.
-    Triggers for each doc_id in state.uploaded_doc_ids.
-    HITL: user approves before gRPC call.
+
+    This node is reached after the user approves via interrupt_before.
+    Iterates over uploaded_doc_ids, calls file-service gRPC for each,
+    appends AI messages with answers + citations, then routes to knowledge_node.
     """
     uploaded_doc_ids = state.get("uploaded_doc_ids", [])
     if not uploaded_doc_ids:
         return Command(goto="knowledge_node", update={})
 
-    messages = state.get("messages", [])
-    # Find the latest user question
-    question = ""
-    for msg in reversed(messages):
-        if hasattr(msg, "content") and isinstance(msg.content, str) and msg.content.strip():
-            if not hasattr(msg, "tool_calls"):
-                question = msg.content
-                break
+    question = _latest_user_question(state)
     if not question:
         return Command(goto="knowledge_node", update={})
 
-    mem0_user_id = state.get("mem0_user_id", "")
     doc_messages = []
+    logs = list(state.get("logs", []))
 
     for doc_id in uploaded_doc_ids:
-        # ── HITL: ask approval ────────────────────────────────────────
-        decision = interrupt({
-            "type": "approval",
-            "tool_name": "ChatSessionDocument",
-            "args": {"doc_id": doc_id, "question": question[:200]},
-            "args_preview": json.dumps({"doc_id": doc_id, "question": question[:200]}),
-        })
-
-        if str(decision).lower() in ("rejected", "false", "no", "deny"):
-            logger.info("User rejected ChatSessionDocument for doc_id=%s", doc_id)
-            doc_messages.append(AIMessage(
-                content=f"[Document retrieval for {doc_id} skipped by user]"
-            ))
-            continue
-
-        # ── Execute: gRPC PageIndex retrieval ─────────────────────────
-        state.setdefault("logs", []).append({
-            "message": f"Searching document {doc_id[:8]}…",
-            "done": False,
-        })
-        log_idx = len(state["logs"]) - 1
-        await copilotkit_emit_state(config, state)
+        logs.append({"message": f"Searching document {doc_id[:8]}…", "done": False})
+        log_idx = len(logs) - 1
+        await emit_state(config, {**state, "logs": logs})
 
         try:
             result = await file_service_client.retrieve(doc_id, question)
@@ -130,15 +123,13 @@ async def document_node(
             logger.exception("ChatSessionDocument failed for doc_id=%s", doc_id)
             content = f"[Error retrieving document {doc_id}: {e}]"
 
-        state["logs"][log_idx]["done"] = True
-        await copilotkit_emit_state(config, state)
-
+        logs[log_idx]["done"] = True
+        await emit_state(config, {**state, "logs": logs})
         doc_messages.append(AIMessage(content=content))
 
-    # Route to knowledge_node next (will also check research_mode)
     return Command(
         goto="knowledge_node",
-        update={"messages": doc_messages} if doc_messages else {},
+        update={"messages": doc_messages, "logs": logs} if doc_messages else {"logs": logs},
     )
 
 
@@ -147,46 +138,26 @@ async def document_node(
 async def knowledge_node(
     state: AgentState,
     config: RunnableConfig,
-) -> Command[Literal["chat_node"]]:
+) -> Command[Literal["search_node", "chat_node"]]:
     """
     Milvus knowledge search — triggered when research_mode=True.
+
+    This node is reached after the user approves via interrupt_before.
     Searches across all user documents and returns ranked chunks with citations.
-    HITL: user approves before gRPC search.
     """
     if not state.get("research_mode", False):
         return Command(goto="chat_node", update={})
 
-    messages = state.get("messages", [])
-    question = ""
-    for msg in reversed(messages):
-        if hasattr(msg, "content") and isinstance(msg.content, str) and msg.content.strip():
-            if not hasattr(msg, "tool_calls"):
-                question = msg.content
-                break
+    question = _latest_user_question(state)
     if not question:
         return Command(goto="chat_node", update={})
 
     mem0_user_id = state.get("mem0_user_id", "")
+    logs = list(state.get("logs", []))
 
-    # ── HITL: ask approval ────────────────────────────────────────────
-    decision = interrupt({
-        "type": "approval",
-        "tool_name": "Knowledge",
-        "args": {"query": question[:200]},
-        "args_preview": json.dumps({"query": question[:200], "mode": "knowledge_base_search"}),
-    })
-
-    if str(decision).lower() in ("rejected", "false", "no", "deny"):
-        logger.info("User rejected Knowledge search")
-        return Command(goto="chat_node", update={})
-
-    # ── Execute: Milvus knowledge search ─────────────────────────────
-    state.setdefault("logs", []).append({
-        "message": "Searching knowledge base (Milvus)…",
-        "done": False,
-    })
-    log_idx = len(state["logs"]) - 1
-    await copilotkit_emit_state(config, state)
+    logs.append({"message": "Searching knowledge base (Milvus)…", "done": False})
+    log_idx = len(logs) - 1
+    await emit_state(config, {**state, "logs": logs})
 
     try:
         chunks = await file_service_client.knowledge_search(
@@ -195,15 +166,19 @@ async def knowledge_node(
             top_k=settings.knowledge_top_k,
         )
         context, citations_md = _format_knowledge_chunks(chunks)
-        content = f"**Knowledge base results:**\n\n{context}{citations_md}" if chunks else "[No relevant knowledge found]"
+        content = (
+            f"**Knowledge base results:**\n\n{context}{citations_md}"
+            if chunks
+            else "[No relevant knowledge found]"
+        )
     except Exception as e:
         logger.exception("Knowledge search failed")
         content = f"[Knowledge search error: {e}]"
 
-    state["logs"][log_idx]["done"] = True
-    await copilotkit_emit_state(config, state)
+    logs[log_idx]["done"] = True
+    await emit_state(config, {**state, "logs": logs})
 
     return Command(
-        goto="chat_node",
-        update={"messages": [AIMessage(content=content)]},
+        goto="search_node" if state.get("research_mode") else "chat_node",
+        update={"messages": [AIMessage(content=content)], "logs": logs},
     )

@@ -79,9 +79,15 @@ async def setup_copilotkit(app: FastAPI):
             )
 
         research_mode = bool(forwarded.get("researchMode", False))
+        uploaded_doc_ids = list(forwarded.get("uploadedDocIds", []))
 
         existing_state = input_data.state or {}
-        patched_state = {**existing_state, "mem0_user_id": user_id, "research_mode": research_mode}
+        patched_state = {
+            **existing_state,
+            "mem0_user_id": user_id,
+            "research_mode": research_mode,
+            "uploaded_doc_ids": uploaded_doc_ids,
+        }
         patched_input = input_data.copy(update={"state": patched_state})
 
         logger.debug("CopilotKit request: user_id=%s thread=%s research_mode=%s", user_id, input_data.thread_id, research_mode)

@@ -96,3 +96,25 @@ CREATE TABLE IF NOT EXISTS document_nodes (
     PRIMARY KEY (node_id, doc_id)
 );
 CREATE INDEX IF NOT EXISTS idx_document_nodes_doc_id ON document_nodes(doc_id);
+
+-- ============================================================
+-- MEM0 INTERNAL TABLES  (pre-created so mem0 doesn't bootstrap on a closed conn)
+-- ============================================================
+
+-- mem0 migration tracker
+CREATE TABLE IF NOT EXISTS mem0migrations (
+    id          VARCHAR(128) PRIMARY KEY,
+    vector      vector(1536),
+    payload     JSONB
+);
+CREATE INDEX IF NOT EXISTS mem0migrations_vector_idx
+    ON mem0migrations USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);
+
+-- mem0 actual memory collection (matches mem0_collection in config)
+CREATE TABLE IF NOT EXISTS agent_memories (
+    id          VARCHAR(128) PRIMARY KEY,
+    vector      vector(1536),
+    payload     JSONB
+);
+CREATE INDEX IF NOT EXISTS agent_memories_vector_idx
+    ON agent_memories USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);

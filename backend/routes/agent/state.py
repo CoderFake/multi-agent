@@ -71,3 +71,6 @@ class AgentState(MessagesState):
 
     # Documents uploaded this session (triggers ChatSessionDocument node)
     uploaded_doc_ids: List[str]
+
+    # HITL state: True when execution_plan is ready and awaiting user approval
+    pending_approval: bool
