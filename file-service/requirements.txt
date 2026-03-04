@@ -1,0 +1,33 @@
+# file-service dependencies
+uvicorn[standard]>=0.27.0
+fastapi>=0.110.0
+
+# gRPC
+grpcio>=1.64.0
+grpcio-tools>=1.64.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.0
+asyncpg>=0.29.0
+pymilvus>=2.4.0
+
+# MinIO async client
+miniopy-async>=1.20.0
+
+# LangChain / LLM
+langchain-core>=0.1.0
+langchain-openai>=0.1.0
+langchain-google-genai>=1.0.0
+
+# Document extraction
+docling>=2.0.0      
+paddlepaddle==3.0.0   
+paddleocr==3.4.0    
+paddlex[ocr]==3.4.2
+langchain-community>=0.0.1 
+
+# Settings
+pydantic-settings>=2.0.0
+
+# Utils
+python-multipart>=0.0.9

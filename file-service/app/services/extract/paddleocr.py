@@ -15,7 +15,10 @@ import asyncio
 import json
 import logging
 import os
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
+
+if TYPE_CHECKING:
+    from paddleocr import PPStructureV3 as _PPStructureV3
 
 from app.config.settings import settings
 from app.services.extract.base import (
@@ -27,7 +30,7 @@ from app.services.extract.base import (
 
 logger = logging.getLogger(__name__)
 
-_pipeline = None
+_pipeline: "_PPStructureV3 | None" = None
 
 
 def _get_pipeline():
@@ -35,7 +38,7 @@ def _get_pipeline():
     global _pipeline
     if _pipeline is None:
         from paddleocr import PPStructureV3
-        _pipeline = PPStructureV3()
+        _pipeline = PPStructureV3(use_chart_parsing=False)
         logger.info("PP-StructureV3 initialized (device=%s)", settings.ocr_device)
     return _pipeline
 

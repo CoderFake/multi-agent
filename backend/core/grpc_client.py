@@ -75,20 +75,11 @@ def _get_stub():
     if _stub is not None:
         return _stub
 
-    # Import generated stubs — must be on sys.path
-    try:
-        import sys, os
-        # file-service proto dir relative to backend
-        proto_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "file-service", "app"
-        )
-        if proto_path not in sys.path:
-            sys.path.insert(0, proto_path)
-        from proto import file_service_pb2, file_service_pb2_grpc
-    except ImportError as e:
-        raise ImportError(
-            "file_service protobuf stubs not found. Run grpc_tools.protoc to generate them."
-        ) from e
+    import sys, os
+    backend_dir = os.path.dirname(os.path.dirname(__file__))  # agent/backend/
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
+    from proto import file_service_pb2, file_service_pb2_grpc
 
     _channel = grpc_aio.insecure_channel(settings.file_service_grpc_url)
     _stub = file_service_pb2_grpc.FileServiceStub(_channel)

@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 def _build_dsn() -> str:
     return (
-        f"postgresql+asyncpg://{settings.pg_user}:{settings.pg_password}"
-        f"@{settings.pg_host}:{settings.pg_port}/{settings.pg_db}"
+        f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}"
+        f"@{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
     )
 
 
@@ -50,7 +50,7 @@ async def init_db() -> None:
     import app.models.document  # noqa: F401 — register models
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables initialized: %s:%s/%s", settings.pg_host, settings.pg_port, settings.pg_db)
+    logger.info("Database tables initialized: %s:%s/%s", settings.postgres_host, settings.postgres_port, settings.postgres_db)
 
 
 @asynccontextmanager

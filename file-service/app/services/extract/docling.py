@@ -70,12 +70,19 @@ def _parse_docling_document(doc, minio_key: str) -> Tuple[List[BlockMeta], str, 
         if hasattr(item, "text"):
             text = item.text or ""
         elif hasattr(item, "export_to_markdown"):
-            text = item.export_to_markdown() or ""
+            try:
+                text = item.export_to_markdown(doc) or ""
+            except TypeError:
+                text = item.export_to_markdown() or ""
 
         # Table → HTML
         if layout_type == "table" and hasattr(item, "export_to_html"):
-            html = item.export_to_html() or ""
-            text = item.export_to_markdown() or text
+            try:
+                html = item.export_to_html(doc) or ""
+                text = item.export_to_markdown(doc) or text
+            except TypeError:
+                html = item.export_to_html() or ""
+                text = item.export_to_markdown() or text
 
         if not text and layout_type not in VISUAL_BLOCK_TYPES:
             continue

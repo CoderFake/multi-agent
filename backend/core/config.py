@@ -1,9 +1,10 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
-# backend/.env (same directory as this config)
+# Root .env — shared by backend, file-service, and docker-compose
+ROOT_DIR = Path(__file__).parent.parent.parent   # agent/
+ENV_FILE = ROOT_DIR / ".env"
 BACKEND_DIR = Path(__file__).parent.parent
-ENV_FILE = BACKEND_DIR / ".env"
 
 # Prompt YAMLs directory
 PROMPTS_DIR = BACKEND_DIR / "static" / "prompts"
@@ -46,18 +47,30 @@ class Settings(BaseSettings):
     # MCP
     mcp_storage_path: str = "./mcp_data"
 
+    # ── PostgreSQL (shared DB) ─────────────────────────
+    postgres_host: str = "localhost"
+    postgres_port: int = 25432
+    postgres_user: str = "postgres"
+    postgres_password: str = "postgres"
+    postgres_db: str = "pageindex_db"
+
     # ── Mem0 ────────────────────────────────────────────
     mem0_enabled: bool = True
     mem0_collection: str = "agent_memories"
-    mem0_embedder_model: str = "text-embedding-3-small"   
-    mem0_embedder_dims: int = 1536                     
+    mem0_embedder_model: str = "text-embedding-3-small"
+    mem0_embedder_dims: int = 1536
 
-    # Mem0 PostgreSQL + pgvector
-    mem0_pg_host: str = "localhost"
-    mem0_pg_port: int = 25432
-    mem0_pg_user: str = "postgres"
-    mem0_pg_password: str = "postgres"
-    mem0_pg_db: str = "pageindex_db"
+    # Mem0 PostgreSQL — reuse POSTGRES_* (no duplicate needed)
+    @property
+    def mem0_pg_host(self) -> str: return self.postgres_host
+    @property
+    def mem0_pg_port(self) -> int: return self.postgres_port
+    @property
+    def mem0_pg_user(self) -> str: return self.postgres_user
+    @property
+    def mem0_pg_password(self) -> str: return self.postgres_password
+    @property
+    def mem0_pg_db(self) -> str: return self.postgres_db
 
     # ── Firebase Admin SDK ────────────────────────────
     firebase_type: str = "service_account"

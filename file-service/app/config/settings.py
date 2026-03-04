@@ -3,7 +3,8 @@ from pydantic_settings import BaseSettings
 from pathlib import Path
 
 FILE_SERVICE_DIR = Path(__file__).parent.parent.parent
-ENV_FILE = FILE_SERVICE_DIR / ".env"
+ROOT_DIR = FILE_SERVICE_DIR.parent   # agent/
+ENV_FILE = ROOT_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -17,12 +18,12 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8001
 
-    # PostgreSQL (shared with backend)
-    pg_host: str = "localhost"
-    pg_port: int = 25432
-    pg_user: str = "postgres"
-    pg_password: str = "postgres"
-    pg_db: str = "pageindex_db"
+    # PostgreSQL (shared with backend) — maps to POSTGRES_* in root .env
+    postgres_host: str = "localhost"
+    postgres_port: int = 25432
+    postgres_user: str = "postgres"
+    postgres_password: str = "postgres"
+    postgres_db: str = "pageindex_db"
 
     # MinIO — SDK endpoint (internal docker network)
     minio_endpoint: str = "localhost:29000"
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
 
     # LLM Provider (same pattern as backend)
     provider: str = "openai"   # "openai" | "gemini" | "ollama"
-    model: str = "gpt-4o-2024-11-20"
+    model: str = "gpt-5-nano"
 
     # OpenAI
     openai_api_key: str = ""
@@ -52,7 +53,7 @@ class Settings(BaseSettings):
 
     # Milvus
     milvus_host: str = "localhost"
-    milvus_port: int = 19530
+    milvus_port: int = 19535
     milvus_collection: str = "agent_knowledge"
     milvus_embedding_dim: int = 1536       # text-embedding-3-small; change if using Gemini/Ollama
     milvus_nlist: int = 128                # IVF_FLAT index nlist
