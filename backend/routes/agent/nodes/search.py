@@ -129,19 +129,6 @@ async def search_node(state: AgentState, config: RunnableConfig):
     if model.__class__.__name__ in ["ChatOpenAI"]:
         ainvoke_kwargs["parallel_tool_calls"] = False
 
-    def _sanitize_messages(msgs):
-        valid_tool_call_ids = set()
-        for msg in msgs:
-            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    valid_tool_call_ids.add(tc.get("id") or tc.get("tool_call_id"))
-        return [
-            msg for msg in msgs
-            if not isinstance(msg, ToolMessage) or msg.tool_call_id in valid_tool_call_ids
-        ]
-
-    safe_messages = _sanitize_messages(state["messages"])
-
     # figure out which resources to use
     response = await model.bind_tools(
         [ExtractResources], tool_choice="ExtractResources", **ainvoke_kwargs
@@ -152,7 +139,8 @@ async def search_node(state: AgentState, config: RunnableConfig):
             You need to extract the 3-5 most relevant resources from the following search results.
             """
             ),
-            *safe_messages,
+
+            ai_message,
             ToolMessage(
                 tool_call_id=ai_message.tool_calls[0]["id"],
                 content=f"Performed search: {truncated_results}",
