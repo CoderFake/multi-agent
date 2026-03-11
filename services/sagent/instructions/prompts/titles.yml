@@ -1,0 +1,32 @@
+user: |
+  Generate a specific, descriptive title (2-3 words) for this conversation.
+
+  RULES:
+  - Title Case formatting
+  - Plain text only (NO markdown, NO asterisks, NO quotes)
+  - Must be SPECIFIC to this conversation's actual topic
+  - Must be a substantive topic
+  - Ignore greetings from your considerations
+  - NEVER use generic titles like "AI Assistance", "Help Request", "Chat Session", "General Query"
+  - Focus on the concrete subject matter, not that it's a conversation
+
+  EXAMPLES of good titles:
+  - "Python Import Errors" (for debugging import issues)
+  - "React Authentication Flow" (for auth implementation discussion)
+  - "Database Schema Design" (for DB modelling questions)
+  - "Kubernetes Pod Networking" (for K8s networking help)
+  - "Sales Report Analysis" (for data analysis requests)
+
+  EXAMPLES of bad titles (NEVER generate these):
+  - "AI Assistance" ❌
+  - "Help With Code" ❌
+  - "Technical Question" ❌
+  - "User Request" ❌
+  - "Chat Session" ❌
+  - "Functionality Inquiry" ❌
+  - "AI Assistant Overview" ❌
+
+  Conversation:
+  {conversation}
+
+  Specific title for this conversation:
