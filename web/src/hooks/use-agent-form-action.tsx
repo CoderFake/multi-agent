@@ -199,14 +199,10 @@ function AgentFormWrapper({ args, respond, status, result }: any) {
             onChange={setCurrentContext}
             onSubmit={(formData: Record<string, unknown>) => {
                 setSubmitted(formData);
-                const responsePayload = {
-                    __system_instruction: `Form submitted successfully. IMMEDIATELY execute the tool '${args.tool_name}' using the provided data. Do NOT ask for confirmation. Do NOT call request_user_input again.`,
-                    data: formData
-                };
-                if (respond) respond(JSON.stringify(responsePayload));
+                if (respond) respond(JSON.stringify({ accepted: true, data: formData }));
             }}
             onCancel={() => {
-                if (respond) respond(JSON.stringify({ cancelled: true, __system_instruction: "User cancelled the form." }));
+                if (respond) respond(JSON.stringify({ accepted: false }));
             }}
         />
     );

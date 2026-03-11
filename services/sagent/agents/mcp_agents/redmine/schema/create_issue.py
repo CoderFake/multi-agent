@@ -43,4 +43,4 @@ class CreateIssueInput(BaseModel):
         json_schema_extra={"format": "date"},
     )
     done_ratio:       Optional[int]   = Field(None, description="Completion % (0-100)")
-    watcher_user_ids: Optional[List[int]] = Field(None, description="Watcher user IDs")
+    watcher_user_ids: list | None = Field(None, description="Watcher user IDs")

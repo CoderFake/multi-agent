@@ -721,7 +721,11 @@ async def redmine_search(input: SearchInput, tool_context: ToolContext) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def request_user_input(input: RequestUserInputInput, tool_context: ToolContext) -> dict:
-    """Show a dynamic form to the user and wait for them to fill it in.
+    """Call this tool ONLY when you are missing required information to execute a creation/update tool, OR when the user explicitly asks to fill out a form.
+    
+    When you receive the return value from this tool (e.g., {"accepted": true, "data": {...}}), it means the user has filled out the form. You MUST EXPLICITLY ask the user for confirmation (e.g., "Are you sure you want to execute this action with the provided details?") BEFORE calling the target tool (e.g., `create_issue`). Wait for their confirmation before executing.
+    
+    If you ALREADY have the required information from the conversation, DO NOT call this tool. Call the target tool (e.g. `create_issue`) directly instead.
 
     ALWAYS fetches fresh dropdown data from Redmine. The LLM should just pass
     tool_name + project_id + form_defaults (pre-fill values).
