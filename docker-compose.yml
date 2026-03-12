@@ -19,6 +19,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis Cache ───────────────────────────────────────────────────────
+  # Used by CMS backend for caching, session management, rate limiting.
+  redis:
+    image: redis:7-alpine
+    container_name: agent-redis
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # ── Milvus Vector Database ─────────────────────────────────────────────
   # Standalone mode with etcd (metadata) + minio (object storage)
   # API exposed on port 19535 for external access
@@ -151,6 +167,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   etcd_data:
   minio_data:
   milvus_data:
