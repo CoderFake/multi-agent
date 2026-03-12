@@ -1,19 +1,28 @@
+import { getIdToken } from "./auth-client";
+
 export async function fetchWithAuth(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     let response = await fetch(input, init);
 
-    // If the request fails with 401 Unauthorized, attempt to refresh the token
     if (response.status === 401) {
         try {
-            const refreshResponse = await fetch("/api/auth/refresh", {
-                method: "POST",
-            });
+            const newToken = await getIdToken(true);
 
-            if (refreshResponse.ok) {
-                // Token successfully refreshed, retry the original request
-                response = await fetch(input, init);
+            if (newToken) {
+                const syncResponse = await fetch("/api/auth/session", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ token: newToken }),
+                });
+
+                if (syncResponse.ok) {
+                    response = await fetch(input, init);
+                } else {
+                    console.error("Token sync with server failed upon refresh");
+                }
             } else {
-                // If refresh fails, we might need to redirect to login or handle session expiration
-                console.error("Token refresh failed");
+                console.error("No active user to refresh token");
             }
         } catch (error) {
             console.error("Error during token refresh:", error);

@@ -48,10 +48,10 @@ export async function signOut() {
 
 // ── Get ID Token (for API calls / setting cookie) ─────────────────────
 
-export async function getIdToken(): Promise<string | null> {
+export async function getIdToken(forceRefresh: boolean = false): Promise<string | null> {
   const user = firebaseAuth.currentUser;
   if (!user) return null;
-  return user.getIdToken();
+  return user.getIdToken(forceRefresh);
 }
 
 // ── Sync Firebase token → cookie ──────────────────────────────────────
