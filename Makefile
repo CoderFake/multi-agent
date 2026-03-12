@@ -1,6 +1,7 @@
 .PHONY: \
 	help \
 	dev dev-debug dev-agent dev-agent-debug dev-web dev-retrieval install install-agent install-web install-retrieval \
+	dev-back dev-front install-back install-front \
 	gcp-switch gcp-status gcp-setup gcp-login \
 	tf-bootstrap tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-output \
 	docker-build docker-push docker-build-backend docker-build-frontend \
@@ -47,6 +48,11 @@ help:
 	@printf "  make dev          Run agent + web servers (main command)\n"
 	@printf "  make dev-debug    Run with DEBUG logging (shows LLM prompts/responses)\n"
 	@printf "  make install      Install all dependencies (agent + web)\n"
+	@printf "\n\033[1;34mCMS Development\033[0m\n"
+	@printf "  make dev-back     Run CMS backend (port 8002)\n"
+	@printf "  make dev-front    Run CMS frontend (port 3001)\n"
+	@printf "  make install-back Install CMS backend dependencies\n"
+	@printf "  make install-front Install CMS frontend dependencies\n"
 	@printf "\n\033[1;34mCode Quality\033[0m\n"
 	@printf "  make check        Full pre-commit check (format + lint + types)\n"
 	@printf "  make fmt          Format all code (ruff + biome + prettier)\n"
@@ -64,8 +70,9 @@ help:
 	@printf "  make db-proxy          Start Cloud SQL Auth Proxy\n"
 	@printf "  make db-reset          Reset local database (dev only)\n"
 	@printf "  make db-generate       Generate Drizzle migration files\n"
-	@printf "  make services-up       Start all services (Postgres+Milvus+RabbitMQ+Retrieval)\n"
+	@printf "  make services-up       Start all services (Postgres+Milvus+RabbitMQ+Redis+Retrieval)\n"
 	@printf "  make services-down     Stop all services\n"
+	@printf "  make services-up-infra Start infra only (Postgres+RabbitMQ+Milvus+Redis+MinIO+Nginx)\n"
 	@printf "\n\033[1;34mGCP\033[0m\n"
 	@printf "  make gcp-login              Full GCP authentication\n"
 	@printf "  make gcp-switch PROFILE=x   Switch GCP project profile\n"
@@ -169,8 +176,28 @@ dev-web:
 	@printf "\n[Web] Starting on http://localhost:3000\n\n"
 	@cd web && npm run dev
 
+# ── CMS Backend (port 8002) ──────────────────────────────────────────────────
+dev-back:
+	@printf "\n[CMS Backend] Starting on http://localhost:8002\n\n"
+	@cd backend && uv run python main.py
+
+# ── CMS Frontend (port 3001) ─────────────────────────────────────────────────
+dev-front:
+	@printf "\n[CMS Frontend] Starting on http://localhost:3001\n\n"
+	@cd frontend && npm run dev
+
+# Install CMS backend dependencies
+install-back:
+	@printf "\n[Install] CMS backend dependencies...\n\n"
+	@cd backend && uv sync
+
+# Install CMS frontend dependencies
+install-front:
+	@printf "\n[Install] CMS frontend dependencies...\n\n"
+	@cd frontend && npm install
+
 # Install all dependencies
-install: install-agent install-web
+install: install-agent install-web install-back install-front
 	$(SEPARATOR)
 	@printf "  All dependencies installed.\n"
 	$(SEPARATOR)
@@ -297,16 +324,16 @@ mcp-pull:
 
 # Start all infrastructure in Docker (except sagent + retrieval which run on host)
 services-up-infra:
-	@printf "\n[Services] Starting infrastructure (postgres, rabbitmq, milvus, minio, nginx)...\n\n"
-	@docker compose up -d postgres rabbitmq milvus minio nginx
+	@printf "\n[Services] Starting infrastructure (postgres, rabbitmq, milvus, redis, minio, nginx)...\n\n"
+	@docker compose up -d postgres rabbitmq milvus redis minio nginx
 	@printf "\nWaiting for Postgres to be ready..."
 	@until docker exec agent-postgres pg_isready -U agent -d agent > /dev/null 2>&1; do \
 		printf "."; \
 		sleep 1; \
 	done
 	@printf " ready!\n"
-	@printf "\nPostgres:  localhost:5433\nRabbitMQ:  localhost:5673\nMilvus:    localhost:19535\nMinIO:     localhost:9010\nNginx:     localhost:8081\n\n"
-	@printf "Next:\n  make db-migrate && make db-py-migrate\n  make dev-agent   (terminal 1)\n  make dev-retrieval (terminal 2)\n"
+	@printf "\nPostgres:  localhost:5433\nRabbitMQ:  localhost:5673\nMilvus:    localhost:19535\nRedis:     localhost:6380\nMinIO:     localhost:9010\nNginx:     localhost:8081\n\n"
+	@printf "Next:\n  make db-migrate && make db-py-migrate\n  make dev-agent   (terminal 1)\n  make dev-retrieval (terminal 2)\n  make dev-back    (terminal 3)\n  make dev-front   (terminal 4)\n"
 
 # Start all services (Postgres + Milvus + RabbitMQ + Retrieval in Docker)
 services-up:
