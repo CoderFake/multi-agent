@@ -123,7 +123,7 @@ class Settings:
 
     # ── Model Config ──────────────────────────────────────────────────
     MODEL_ROOT: str = field(
-        default_factory=lambda: _env("MODEL_ROOT", "gemini-2.5-pro")
+        default_factory=lambda: _env("MODEL_ROOT", "gemini-3-flash-preview")
     )
     MODEL_SEARCH: str = field(
         default_factory=lambda: _env("MODEL_SEARCH", "gemini-2.5-flash")
