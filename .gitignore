@@ -212,4 +212,6 @@ poetry.toml
 pyrightconfig.json
 !web/next-env.d.ts
 !web/src/lib
+!frontend/src/lib
+!frontend/next-env.d.ts
 # End of https://www.toptal.com/developers/gitignore/api/nextjs,python
