@@ -29,9 +29,9 @@ export default function DashboardPage() {
       {/* Stats cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         {stats.map((stat) => (
-          <Card key={stat.key} className="relative overflow-hidden">
+          <Card key={stat.key} className="relative overflow-hidden transition-shadow hover:shadow-md">
             <CardContent className="flex items-center gap-4 pt-6">
-              <div className={`rounded-lg bg-muted p-3 ${stat.color}`}>
+              <div className={`rounded-lg bg-gradient-to-br from-muted to-muted/50 p-3 ${stat.color}`}>
                 <stat.icon className="h-5 w-5" />
               </div>
               <div>

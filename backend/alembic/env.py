@@ -27,10 +27,7 @@ from app.config.settings import settings  # noqa: E402
 from app.models.base import Base  # noqa: E402
 
 # Import all models so Alembic can detect them
-# (Models will be added here in Sprint 2)
-# from app.models import (  # noqa: E402, F401
-#     CmsUser, CmsOrganization, ...
-# )
+import app.models  # noqa: E402, F401
 
 DATABASE_URL = settings.CMS_DATABASE_URL
 

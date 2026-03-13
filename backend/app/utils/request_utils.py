@@ -40,3 +40,28 @@ def get_request_origin(request: Request) -> Optional[str]:
         Origin string or None
     """
     return request.headers.get("origin")
+
+
+def build_org_frontend_url(subdomain: str | None = None) -> str:
+    """
+    Build the frontend URL for an org.
+
+    Production (BASE_DOMAIN set):
+        https://{subdomain}.{BASE_DOMAIN}
+    Local dev (BASE_DOMAIN empty):
+        FRONTEND_URL (e.g. http://localhost:3000)
+
+    Args:
+        subdomain: org subdomain for production URLs
+
+    Returns:
+        Frontend base URL (no trailing slash)
+    """
+    from app.config.settings import settings
+
+    if settings.BASE_DOMAIN and subdomain:
+        # Production — subdomain-based routing
+        return f"https://{subdomain}.{settings.BASE_DOMAIN}"
+    else:
+        # Local dev — single frontend instance
+        return settings.FRONTEND_URL.rstrip("/")

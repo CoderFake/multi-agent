@@ -1,0 +1,156 @@
+"""
+Tenant Group API — CRUD + permission assignment + member management.
+Requires org membership (require_org_membership).
+"""
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.dependencies import get_db_session, get_cache_service, require_org_membership
+from app.common.types import CurrentUser
+from app.cache.service import CacheService
+from app.schemas.group import GroupCreate, GroupUpdate, GroupResponse, GroupListResponse, PermissionAssign, GroupMemberAction
+from app.services.tenant_group import tenant_group_svc
+
+router = APIRouter(prefix="/groups", tags=["tenant-groups"])
+
+
+@router.get("", response_model=GroupListResponse)
+async def list_groups(
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """List all groups in the current org."""
+    items = await tenant_group_svc.list_groups(db, cache, user.org_id)
+    return {"items": items, "total": len(items)}
+
+
+@router.post("", response_model=GroupResponse, status_code=201)
+async def create_group(
+    data: GroupCreate,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Create a new group in the org."""
+    group = await tenant_group_svc.create_group(
+        db, cache, user.org_id, data.name, data.description,
+    )
+    return {
+        "id": str(group.id), "org_id": str(group.org_id),
+        "name": group.name, "description": group.description,
+        "is_system_default": group.is_system_default,
+        "member_count": 0, "permission_count": 0,
+    }
+
+
+@router.put("/{group_id}", response_model=GroupResponse)
+async def update_group(
+    group_id: str,
+    data: GroupUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Update a group."""
+    group = await tenant_group_svc.update_group(
+        db, cache, user.org_id, group_id,
+        **data.model_dump(exclude_unset=True),
+    )
+    return {
+        "id": str(group.id), "org_id": str(group.org_id),
+        "name": group.name, "description": group.description,
+        "is_system_default": group.is_system_default,
+        "member_count": 0, "permission_count": 0,
+    }
+
+
+@router.delete("/{group_id}", status_code=204)
+async def delete_group(
+    group_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Delete a group."""
+    await tenant_group_svc.delete_group(db, cache, user.org_id, group_id)
+
+
+# ── Permission Assignment ────────────────────────────────────────────────
+
+@router.post("/{group_id}/permissions", status_code=204)
+async def assign_permissions(
+    group_id: str,
+    data: PermissionAssign,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Assign permissions to a group."""
+    await tenant_group_svc.assign_permissions(
+        db, cache, user.org_id, group_id, data.permission_ids,
+    )
+
+
+@router.delete("/{group_id}/permissions", status_code=204)
+async def revoke_permissions(
+    group_id: str,
+    data: PermissionAssign,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Revoke permissions from a group."""
+    await tenant_group_svc.revoke_permissions(
+        db, cache, user.org_id, group_id, data.permission_ids,
+    )
+
+
+@router.get("/{group_id}/permissions")
+async def get_group_permissions(
+    group_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Get permissions assigned to a group."""
+    return await tenant_group_svc.get_group_permissions(db, group_id)
+
+
+# ── Member Management ────────────────────────────────────────────────────
+
+@router.post("/{group_id}/members", status_code=204)
+async def add_member(
+    group_id: str,
+    data: GroupMemberAction,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Add a user to a group."""
+    await tenant_group_svc.add_member(
+        db, cache, user.org_id, group_id, data.user_id,
+    )
+
+
+@router.delete("/{group_id}/members/{member_user_id}", status_code=204)
+async def remove_member(
+    group_id: str,
+    member_user_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Remove a user from a group."""
+    await tenant_group_svc.remove_member(
+        db, cache, user.org_id, group_id, member_user_id,
+    )
+
+
+@router.get("/{group_id}/members")
+async def get_group_members(
+    group_id: str,
+    db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Get users in a group."""
+    return await tenant_group_svc.get_group_members(db, group_id)

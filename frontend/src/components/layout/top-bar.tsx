@@ -1,22 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { LocaleSwitcher } from "@/components/locale-switcher";
 import { UserNav } from "@/components/layout/user-nav";
+
+const ThemeToggle = dynamic(() => import("@/components/theme-toggle").then((m) => m.ThemeToggle), { ssr: false });
+const NotificationBell = dynamic(() => import("@/components/layout/notification-bell").then((m) => m.NotificationBell), { ssr: false });
+const LocaleSwitcher = dynamic(() => import("@/components/locale-switcher").then((m) => m.LocaleSwitcher), { ssr: false });
 
 export function TopBar() {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+    <header className="flex shrink-0 items-center gap-2 px-3 pt-4">
       <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-2 h-4" />
 
       {/* Breadcrumb placeholder — Sprint F5 */}
       <div className="flex-1" />
 
       {/* Right side actions */}
       <div className="flex items-center gap-1">
+        <NotificationBell />
         <ThemeToggle />
         <LocaleSwitcher />
         <UserNav />
@@ -24,3 +26,4 @@ export function TopBar() {
     </header>
   );
 }
+

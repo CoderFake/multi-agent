@@ -32,7 +32,7 @@ export function DataTablePagination({
       </div>
       <div className="flex items-center gap-1">
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => onPageChange(1)}
@@ -41,7 +41,7 @@ export function DataTablePagination({
           <ChevronsLeft className="h-4 w-4" />
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => onPageChange(page - 1)}
@@ -53,7 +53,7 @@ export function DataTablePagination({
           {page} / {pageCount}
         </span>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => onPageChange(page + 1)}
@@ -62,7 +62,7 @@ export function DataTablePagination({
           <ChevronRight className="h-4 w-4" />
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="h-8 w-8"
           onClick={() => onPageChange(pageCount)}

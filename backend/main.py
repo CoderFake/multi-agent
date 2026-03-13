@@ -34,6 +34,12 @@ async def lifespan(app: FastAPI):
         app.state.redis = redis_manager.get_redis()
         app.state.db_session = db_manager.get_session
 
+        from app.init_db import seed_content_types_and_permissions, seed_default_groups, seed_superuser
+        async with db_manager.session() as db:
+            perm_map = await seed_content_types_and_permissions(db)
+            await seed_default_groups(db, perm_map)
+            await seed_superuser(db)
+
         logger.info("CMS Backend started successfully")
 
     except Exception as e:

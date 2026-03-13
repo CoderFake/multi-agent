@@ -14,6 +14,7 @@ from app.models.organization import CmsOrganization, CmsOrgMembership
 # Agent & MCP
 from app.models.agent import CmsAgent, CmsOrgAgent
 from app.models.mcp import CmsMcpServer, CmsTool
+from app.models.agent_access import CmsAgentMcpServer, CmsGroupAgent, CmsGroupToolAccess
 from app.models.ui import CmsUIComponent
 from app.models.resource_permission import CmsResourcePermission
 
@@ -28,6 +29,8 @@ from app.models.document import CmsDocument, CmsDocumentAccess, CmsAgentKnowledg
 from app.models.oauth import CmsOAuthConnection
 from app.models.audit import CmsAuditLog
 from app.models.system_setting import CmsSystemSetting
+from app.models.notification import CmsNotification
+from app.models.feedback import CmsFeedback
 
 __all__ = [
     "Base", "TimestampMixin", "SoftDeleteMixin",
@@ -37,6 +40,7 @@ __all__ = [
     "CmsOrganization", "CmsOrgMembership",
     "CmsAgent", "CmsOrgAgent",
     "CmsMcpServer", "CmsTool",
+    "CmsAgentMcpServer", "CmsGroupAgent", "CmsGroupToolAccess",
     "CmsUIComponent",
     "CmsResourcePermission",
     "CmsProvider", "CmsProviderKey", "CmsAgentModel", "CmsAgentProvider",
@@ -45,4 +49,6 @@ __all__ = [
     "CmsOAuthConnection",
     "CmsAuditLog",
     "CmsSystemSetting",
+    "CmsNotification",
+    "CmsFeedback",
 ]

@@ -29,8 +29,12 @@ import {
   FolderOpen,
   LayoutDashboard,
   ScrollText,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const FeedbackDialog = dynamic(() => import("@/components/layout/feedback-dialog").then((m) => m.FeedbackDialog), { ssr: false });
 
 interface NavItem {
   title: string;
@@ -44,6 +48,7 @@ const systemNavItems: NavItem[] = [
   { title: "agents", href: "/system/agents", icon: Bot },
   { title: "providers", href: "/system/providers", icon: Plug },
   { title: "mcpServers", href: "/system/mcp-servers", icon: Server },
+  { title: "feedback", href: "/system/feedback", icon: MessageSquare },
   { title: "settings", href: "/system/settings", icon: Settings },
 ];
 
@@ -70,17 +75,17 @@ export function AppSidebar() {
   const tenantPrefix = orgId ? `/t/${orgId}` : "";
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
+    <Sidebar variant="floating" collapsible="icon" className="border-r-0">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard">
+              <Link href="/dashboard" className="flex items-center">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
                   C
                 </div>
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">CMS Admin</span>
+                  <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">CMS Admin</span>
                   <span className="text-xs text-muted-foreground">v0.1.0</span>
                 </div>
               </Link>
@@ -159,6 +164,9 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <FeedbackDialog />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <OrgSwitcher />
           </SidebarMenuItem>

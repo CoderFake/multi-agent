@@ -6,6 +6,7 @@ from typing import Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import UploadFile
 
 from app.core.exceptions import CmsException
 from app.common.constants import ErrorCode
@@ -16,6 +17,7 @@ from app.cache.invalidation import CacheInvalidation
 from app.models.organization import CmsOrganization, CmsOrgMembership
 from app.models.user import CmsUser
 from app.utils.logging import get_logger
+from app.utils.storage import upload_file, delete_file, get_public_url, generate_path
 
 logger = get_logger(__name__)
 
@@ -24,24 +26,32 @@ class OrganizationService:
     """Organization CRUD service with Redis cache."""
 
     async def create(
-        self, db: AsyncSession, cache: CacheService, name: str, slug: str, timezone: str = "UTC"
+        self, db: AsyncSession, cache: CacheService,
+        name: str, subdomain: str, timezone: str = "UTC",
     ) -> CmsOrganization:
         """Create a new organization. Invalidates system org cache."""
+        slug = subdomain  # slug = subdomain
+
         existing = await db.execute(
-            select(CmsOrganization).where(CmsOrganization.slug == slug)
+            select(CmsOrganization).where(
+                (CmsOrganization.slug == slug) | (CmsOrganization.subdomain == subdomain)
+            )
         )
         if existing.scalar_one_or_none():
             raise CmsException(
                 error_code=ErrorCode.ORG_SLUG_EXISTS,
-                detail=f"Organization slug '{slug}' already exists",
+                detail=f"Organization subdomain '{subdomain}' already exists",
                 status_code=409,
             )
 
-        org = CmsOrganization(name=name, slug=slug, timezone=timezone, is_active=True)
+        org = CmsOrganization(
+            name=name, slug=slug, subdomain=subdomain,
+            timezone=timezone, is_active=True,
+        )
         db.add(org)
         await db.commit()
         await db.refresh(org)
-        logger.info(f"Organization created: {org.name} ({org.slug})")
+        logger.info(f"Organization created: {org.name} ({org.subdomain})")
         return org
 
     async def get(self, db: AsyncSession, cache: CacheService, org_id: str) -> dict:
@@ -55,6 +65,8 @@ class OrganizationService:
                 "id": str(org.id),
                 "name": org.name,
                 "slug": org.slug,
+                "subdomain": org.subdomain,
+                "logo_url": org.logo_url,
                 "timezone": org.timezone,
                 "is_active": org.is_active,
                 "created_at": org.created_at,
@@ -132,7 +144,26 @@ class OrganizationService:
         """Update organization. Invalidates org cache."""
         org = await self.get_model(db, org_id)
 
-        if "slug" in kwargs and kwargs["slug"]:
+        # If subdomain is being updated, validate uniqueness and sync slug
+        new_subdomain = kwargs.get("subdomain")
+        if new_subdomain and new_subdomain != org.subdomain:
+            existing = await db.execute(
+                select(CmsOrganization).where(
+                    (CmsOrganization.subdomain == new_subdomain) | (CmsOrganization.slug == new_subdomain),
+                    CmsOrganization.id != org_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                raise CmsException(
+                    error_code=ErrorCode.ORG_SLUG_EXISTS,
+                    detail=f"Subdomain '{new_subdomain}' already used",
+                    status_code=409,
+                )
+            # Keep slug in sync with subdomain
+            kwargs["slug"] = new_subdomain
+
+        # Legacy slug-only check (if slug is sent without subdomain)
+        if "slug" in kwargs and kwargs["slug"] and "subdomain" not in kwargs:
             existing = await db.execute(
                 select(CmsOrganization).where(
                     CmsOrganization.slug == kwargs["slug"],
@@ -217,7 +248,7 @@ class OrganizationService:
             select(CmsOrgMembership, CmsUser)
             .join(CmsUser, CmsOrgMembership.user_id == CmsUser.id)
             .where(CmsOrgMembership.org_id == org_id)
-            .order_by(CmsOrgMembership.created_at.desc())
+            .order_by(CmsOrgMembership.joined_at.desc())
         )
         members = []
         for membership, user in result.all():
@@ -227,9 +258,48 @@ class OrganizationService:
                 "user_full_name": user.full_name,
                 "org_role": membership.org_role,
                 "is_active": membership.is_active,
-                "joined_at": membership.created_at,
+                "joined_at": membership.joined_at,
             })
         return members
+
+    async def upload_logo(
+        self, db: AsyncSession, org_id: str, file: UploadFile,
+    ) -> str:
+        """Upload org logo to S3 using org's subdomain as bucket."""
+        allowed_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+        if file.content_type not in allowed_types:
+            raise CmsException(
+                error_code="INVALID_FILE_TYPE",
+                detail=f"Allowed types: {', '.join(allowed_types)}",
+                status_code=400,
+            )
+
+        result = await db.execute(
+            select(CmsOrganization).where(CmsOrganization.id == org_id)
+        )
+        org = result.scalar_one_or_none()
+        if not org:
+            raise CmsException(
+                error_code=ErrorCode.ORG_NOT_FOUND,
+                detail="Organization not found",
+                status_code=404,
+            )
+
+        bucket = org.subdomain or org.slug
+
+        # Delete old logo if exists
+        if org.logo_url:
+            await delete_file(org.logo_url, bucket=bucket)
+
+        # Upload new
+        path = generate_path("logo", file.filename or "logo.jpg")
+        storage_path = await upload_file(file, path, bucket=bucket)
+
+        # Save to DB
+        org.logo_url = storage_path
+        await db.commit()
+
+        return get_public_url(storage_path, bucket=bucket)
 
 
 # Singleton

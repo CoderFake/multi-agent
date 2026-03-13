@@ -4,51 +4,20 @@ No self-registration — users are invited by admins.
 JWT tokens stored in HttpOnly cookies.
 Token blacklisting via Redis TTL.
 """
-from fastapi import APIRouter, Depends, Response, Request
+from fastapi import APIRouter, Depends, Response, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
 from app.core.dependencies import get_db_session, get_redis, get_current_user
 from app.common.types import CurrentUser
 from app.services.auth import auth_svc
-from app.schemas.auth import LoginRequest, MeResponse
-from app.config.settings import settings
+from app.schemas.auth import LoginRequest, MeResponse, ChangePasswordRequest
 from app.core.exceptions import CmsException
 from app.common.constants import ErrorCode
+from app.utils.cookie import _set_auth_cookies, _clear_auth_cookies
+from app.utils.request_utils import get_request_origin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-# Cookie settings
-COOKIE_SECURE = settings.ENVIRONMENT != "development"
-COOKIE_SAMESITE = "lax"
-
-
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    """Set JWT tokens as HttpOnly cookies."""
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=COOKIE_SECURE,
-        samesite=COOKIE_SAMESITE,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        path="/",
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=COOKIE_SECURE,
-        samesite="strict",
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth/refresh",
-    )
-
-
-def _clear_auth_cookies(response: Response) -> None:
-    """Clear JWT cookies."""
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/api/v1/auth/refresh")
 
 
 @router.post("/login")
@@ -58,9 +27,13 @@ async def login(
     db: AsyncSession = Depends(get_db_session),
 ):
     """Login with email/password → set JWT cookies."""
-    user, access_token, refresh_token = await auth_svc.login(db, body.email, body.password)
+    user, access_token, refresh_token, must_change = await auth_svc.login(db, body.email, body.password)
     _set_auth_cookies(response, access_token, refresh_token)
-    return {"message": "Login successful", "user_id": str(user.id)}
+    return {
+        "message": "Login successful",
+        "user_id": str(user.id),
+        "must_change_password": must_change,
+    }
 
 
 @router.post("/refresh")
@@ -103,8 +76,36 @@ async def logout(
 
 @router.get("/me", response_model=MeResponse)
 async def me(
+    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Get current user info + org memberships."""
-    return await auth_svc.get_me(db, current_user.user_id)
+    origin = get_request_origin(request)
+    return await auth_svc.get_me(db, current_user.user_id, origin)
+
+
+@router.put("/avatar")
+async def upload_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Upload user avatar to S3. Returns public URL."""
+    origin = get_request_origin(request)
+    avatar_url = await auth_svc.update_avatar(db, current_user.user_id, file, origin)
+    return {"avatar_url": avatar_url}
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Change user password. Required after first login with temp password."""
+    await auth_svc.change_password(
+        db, current_user.user_id, body.current_password, body.new_password,
+    )
+    return {"message": "Password changed successfully"}

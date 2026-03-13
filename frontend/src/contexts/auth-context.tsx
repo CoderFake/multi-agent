@@ -8,8 +8,9 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import * as authApi from "@/lib/auth";
+import { api } from "@/lib/api-client";
 import type { MeResponse } from "@/types/auth";
 import type { ApiError } from "@/lib/api-client";
 
@@ -23,23 +24,36 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** Pages that don't require auth — no redirect on 401 */
+const PUBLIC_PATHS = ["/login", "/change-password", "/accept-invite"];
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Check session on mount
   useEffect(() => {
     authApi
       .getMe()
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch((e) => {
+        setUser(null);
+        const err = e as ApiError;
+        // 401 on a protected page → redirect to login
+        if (err.status_code === 401 && !PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+          router.replace("/login");
+        }
+      })
       .finally(() => setIsLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(
     async (email: string, password: string) => {
       await authApi.login({ email, password });
+      api.resetExpired();
       const me = await authApi.getMe();
       setUser(me);
       router.push("/dashboard");

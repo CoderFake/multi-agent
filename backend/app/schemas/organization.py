@@ -10,22 +10,22 @@ from pydantic import BaseModel, field_validator
 class OrgCreate(BaseModel):
     """POST /system/organizations."""
     name: str
-    slug: str
+    subdomain: str
     timezone: str = "UTC"
 
-    @field_validator("slug")
+    @field_validator("subdomain")
     @classmethod
-    def validate_slug(cls, v: str) -> str:
+    def validate_subdomain(cls, v: str) -> str:
         v = v.lower().strip()
         if not v.replace("-", "").replace("_", "").isalnum():
-            raise ValueError("Slug must be alphanumeric with hyphens/underscores")
+            raise ValueError("Subdomain must be alphanumeric with hyphens/underscores")
         return v
 
 
 class OrgUpdate(BaseModel):
     """PUT /system/organizations/{id}."""
     name: Optional[str] = None
-    slug: Optional[str] = None
+    subdomain: Optional[str] = None
     timezone: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -35,6 +35,8 @@ class OrgResponse(BaseModel):
     id: str
     name: str
     slug: str
+    subdomain: Optional[str] = None
+    logo_url: Optional[str] = None
     timezone: str
     is_active: bool
     created_at: datetime
@@ -62,6 +64,5 @@ class MembershipResponse(BaseModel):
 
 
 class AddMemberRequest(BaseModel):
-    """POST /system/organizations/{id}/members."""
+    """POST /system/organizations/{id}/members — always owner."""
     user_id: str
-    org_role: str = "member"

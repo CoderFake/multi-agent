@@ -48,16 +48,25 @@ class PermissionService:
         if user.is_superuser:
             return True, "superuser"
 
-        # 2) Check membership
-        membership = await db.execute(
+        # 2) Check membership + org_role
+        membership_result = await db.execute(
             select(CmsOrgMembership).where(
                 CmsOrgMembership.user_id == user_id,
                 CmsOrgMembership.org_id == org_id,
                 CmsOrgMembership.is_active.is_(True),
             )
         )
-        if not membership.scalar_one_or_none():
+        membership = membership_result.scalar_one_or_none()
+        if not membership:
             return False, "not_member"
+
+        # 3) Owner — full access to everything in org
+        if membership.org_role == "owner":
+            return True, "owner"
+
+        # 4) Admin — full access except destructive user ops
+        if membership.org_role == "admin":
+            return True, "admin"
 
         # 3) Resource-level override (if applicable)
         if resource_type and resource_id:
@@ -121,7 +130,24 @@ class PermissionService:
         if cached:
             return set(json.loads(cached))
 
-        # Resolve from DB
+        # Check org_role — owner/admin get all permissions automatically
+        membership_result = await db.execute(
+            select(CmsOrgMembership).where(
+                CmsOrgMembership.user_id == user_id,
+                CmsOrgMembership.org_id == org_id,
+                CmsOrgMembership.is_active.is_(True),
+            )
+        )
+        membership = membership_result.scalar_one_or_none()
+
+        if membership and membership.org_role in ("owner", "admin"):
+            # Owner/admin: get ALL permission codenames from DB
+            all_perms_result = await db.execute(select(CmsPermission.codename))
+            permissions = set(row[0] for row in all_perms_result.all())
+            await redis.setex(cache_key, settings.CACHE_PERMISSION_TTL, json.dumps(list(permissions)))
+            return permissions
+
+        # Resolve from DB for regular members
         permissions: set[str] = set()
 
         # User overrides (granted)

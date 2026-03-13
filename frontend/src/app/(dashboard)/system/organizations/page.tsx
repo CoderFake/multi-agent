@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import useSWR from "swr";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { OrganizationListItem, OrgCreateData } from "@/types/models";
-import type { PaginatedResponse } from "@/types/api";
 import {
   fetchOrganizations,
   createOrganization,
-  updateOrganization,
   deleteOrganization,
+  fetchTimezones,
 } from "@/lib/api/system";
 import { formatDateTime } from "@/lib/datetime";
 import { PageHeader } from "@/components/shared/page-header";
@@ -35,16 +35,14 @@ import { Plus } from "lucide-react";
 export default function OrganizationsPage() {
   const t = useTranslations("common");
   const ts = useTranslations("system");
+  const router = useRouter();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingOrg, setEditingOrg] = useState<OrganizationListItem | null>(
-    null,
-  );
   const [deleteOrg, setDeleteOrg] = useState<OrganizationListItem | null>(null);
   const [formData, setFormData] = useState<OrgCreateData>({
     name: "",
-    slug: "",
+    subdomain: "",
     timezone: "UTC",
   });
   const [saving, setSaving] = useState(false);
@@ -54,20 +52,27 @@ export default function OrganizationsPage() {
     () => fetchOrganizations({ page, pageSize: 20, search: search || undefined }),
   );
 
+  const { data: timezones } = useSWR("timezones", fetchTimezones);
+
   const columns: ColumnDef<OrganizationListItem, unknown>[] = [
     {
       accessorKey: "name",
       header: t("name"),
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.name}</span>
+        <button
+          onClick={() => router.push(`/system/organizations/${row.original.id}`)}
+          className="font-medium text-primary hover:underline text-left"
+        >
+          {row.original.name}
+        </button>
       ),
     },
     {
-      accessorKey: "slug",
-      header: t("slug"),
+      accessorKey: "subdomain",
+      header: ts("subdomain"),
       cell: ({ row }) => (
         <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-          {row.original.slug}
+          {row.original.subdomain || row.original.slug}
         </code>
       ),
     },
@@ -88,7 +93,7 @@ export default function OrganizationsPage() {
       header: "",
       cell: ({ row }) => (
         <ActionDropdown
-          onEdit={() => openEdit(row.original)}
+          onEdit={() => router.push(`/system/organizations/${row.original.id}`)}
           onDelete={() => setDeleteOrg(row.original)}
         />
       ),
@@ -96,35 +101,25 @@ export default function OrganizationsPage() {
   ];
 
   const openCreate = () => {
-    setEditingOrg(null);
-    setFormData({ name: "", slug: "", timezone: "UTC" });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (org: OrganizationListItem) => {
-    setEditingOrg(org);
-    setFormData({ name: org.name, slug: org.slug, timezone: org.timezone });
+    setFormData({ name: "", subdomain: "", timezone: "UTC" });
     setDialogOpen(true);
   };
 
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      if (editingOrg) {
-        await updateOrganization(editingOrg.id, formData);
-        toast.success(t("updateSuccess"));
-      } else {
-        await createOrganization(formData);
-        toast.success(t("createSuccess"));
-      }
+      const org = await createOrganization(formData);
+      toast.success(t("createSuccess"));
       setDialogOpen(false);
       mutate();
+      // Redirect to detail page after create
+      router.push(`/system/organizations/${org.id}`);
     } catch {
       toast.error("Error");
     } finally {
       setSaving(false);
     }
-  }, [editingOrg, formData, mutate, t]);
+  }, [formData, mutate, t, router]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteOrg) return;
@@ -165,12 +160,12 @@ export default function OrganizationsPage() {
         isLoading={isLoading}
       />
 
-      {/* Create / Edit Dialog */}
+      {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingOrg ? t("edit") : t("create")} {ts("orgsTitle")}
+              {ts("createOrg")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -184,29 +179,40 @@ export default function OrganizationsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>{t("slug")}</Label>
+              <Label>{ts("subdomain")} *</Label>
               <Input
-                value={formData.slug}
+                value={formData.subdomain}
                 onChange={(e) =>
-                  setFormData({ ...formData, slug: e.target.value })
+                  setFormData({ ...formData, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, "") })
                 }
+                placeholder="e.g. nws"
               />
+              <p className="text-xs text-muted-foreground">
+                Used as tenant identifier in production
+              </p>
             </div>
             <div className="space-y-2">
               <Label>{t("timezone")}</Label>
-              <Input
+              <select
                 value={formData.timezone}
                 onChange={(e) =>
                   setFormData({ ...formData, timezone: e.target.value })
                 }
-              />
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-2 focus-visible:border-muted-foreground/70"
+              >
+                {(timezones ?? []).map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               {t("cancel")}
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || !formData.name || !formData.subdomain}>
               {saving ? t("processing") : t("save")}
             </Button>
           </DialogFooter>

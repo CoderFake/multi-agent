@@ -72,7 +72,9 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_SECURE: bool = False
     MINIO_BUCKET: str = "cms-documents"
+    MINIO_INTERNAL_ENDPOINT: str = "minio:9000"  # Docker internal endpoint
     MINIO_PUBLIC_URL: str = "http://localhost:8081/storage"
+    BUCKET_SYSTEM: str = "system"
 
     # ── Superuser ────────────────────────────────────────────────────────
     SUPERUSER_EMAIL: str = "admin@cmsadmin.com"
@@ -82,8 +84,24 @@ class Settings(BaseSettings):
     # ── Logging ──────────────────────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
 
+    # ── SMTP ─────────────────────────────────────────────────────────────
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@agent.com"
+    SMTP_USE_TLS: bool = True
+
+    # ── RabbitMQ ─────────────────────────────────────────────────────────
+    RABBITMQ_URL: str = "amqp://agent:localdev@localhost:5673/"
+
+    # ── Frontend ─────────────────────────────────────────────────────────
+    # BASE_DOMAIN: empty = local dev (use FRONTEND_URL), set = production (subdomain.BASE_DOMAIN)
+    BASE_DOMAIN: str = ""
+    FRONTEND_URL: str = "http://localhost:3000"
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

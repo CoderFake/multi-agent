@@ -19,6 +19,7 @@ class CmsUser(Base, TimestampMixin, SoftDeleteMixin):
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False, index=True)
     last_login = Column(DateTime(timezone=True), nullable=True)
+    avatar_url = Column(String(500), nullable=True)  # S3 storage path
 
     def __repr__(self) -> str:
         return f"<CmsUser(id={self.id}, email={self.email})>"

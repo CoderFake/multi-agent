@@ -64,14 +64,14 @@ export function DataTable<TData>({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-lg border border-border/50 bg-card">
         <div className="relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr
                   key={headerGroup.id}
-                  className="border-b bg-muted/50"
+                  className="border-b border-border/50 bg-muted/30"
                 >
                   {headerGroup.headers.map((header) => (
                     <th
@@ -81,9 +81,9 @@ export function DataTable<TData>({
                       {header.isPlaceholder
                         ? null
                         : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                     </th>
                   ))}
                 </tr>
@@ -92,7 +92,7 @@ export function DataTable<TData>({
             <tbody>
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-b">
+                  <tr key={i} className="border-b border-border/40">
                     {columns.map((_, j) => (
                       <td key={j} className="px-4 py-3">
                         <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
@@ -113,7 +113,7 @@ export function DataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b transition-colors hover:bg-muted/30"
+                    className="border-b border-border/40 last:border-b-0 transition-colors hover:bg-muted/30"
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3">

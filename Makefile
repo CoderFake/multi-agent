@@ -178,7 +178,9 @@ dev-web:
 
 # ── CMS Backend (port 8002) ──────────────────────────────────────────────────
 dev-back:
-	@printf "\n[CMS Backend] Starting on http://localhost:8002\n\n"
+	@printf "\n[CMS Backend] Starting on http://localhost:8002\n"
+	@printf "[Email Worker] Starting in background...\n\n"
+	@cd backend && uv run python -m app.workers.email_worker &
 	@cd backend && uv run python main.py
 
 # ── CMS Frontend (port 3001) ─────────────────────────────────────────────────

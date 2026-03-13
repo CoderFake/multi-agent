@@ -5,18 +5,15 @@ import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import useSWR from "swr";
 import type { ColumnDef } from "@tanstack/react-table";
-import type { SystemProvider, ProviderCreateData } from "@/types/models";
+import type { SystemProvider } from "@/types/models";
 import {
   fetchSystemProviders,
-  createSystemProvider,
   updateSystemProvider,
-  deleteSystemProvider,
 } from "@/lib/api/system";
 import { formatDateTime } from "@/lib/datetime";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/data-table/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ActionDropdown } from "@/components/shared/action-dropdown";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,17 +26,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Plus } from "lucide-react";
 
 export default function SystemProvidersPage() {
   const t = useTranslations("common");
   const ts = useTranslations("system");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SystemProvider | null>(null);
-  const [deleteItem, setDeleteItem] = useState<SystemProvider | null>(null);
-  const [formData, setFormData] = useState<ProviderCreateData>({
+  const [formData, setFormData] = useState({
     name: "",
-    slug: "",
     api_base_url: "",
     auth_type: "api_key",
     is_active: true,
@@ -103,34 +97,28 @@ export default function SystemProvidersPage() {
             setEditingItem(row.original);
             setFormData({
               name: row.original.name,
-              slug: row.original.slug,
               api_base_url: row.original.api_base_url ?? "",
               auth_type: row.original.auth_type,
               is_active: row.original.is_active,
             });
             setDialogOpen(true);
           }}
-          onDelete={() => setDeleteItem(row.original)}
         />
       ),
     },
   ];
 
   const handleSave = useCallback(async () => {
+    if (!editingItem) return;
     setSaving(true);
     try {
-      if (editingItem) {
-        await updateSystemProvider(editingItem.id, {
-          name: formData.name,
-          api_base_url: formData.api_base_url,
-          auth_type: formData.auth_type,
-          is_active: formData.is_active,
-        });
-        toast.success(t("updateSuccess"));
-      } else {
-        await createSystemProvider(formData);
-        toast.success(t("createSuccess"));
-      }
+      await updateSystemProvider(editingItem.id, {
+        name: formData.name,
+        api_base_url: formData.api_base_url,
+        auth_type: formData.auth_type,
+        is_active: formData.is_active,
+      });
+      toast.success(t("updateSuccess"));
       setDialogOpen(false);
       mutate();
     } catch {
@@ -140,39 +128,9 @@ export default function SystemProvidersPage() {
     }
   }, [editingItem, formData, mutate, t]);
 
-  const handleDelete = useCallback(async () => {
-    if (!deleteItem) return;
-    try {
-      await deleteSystemProvider(deleteItem.id);
-      toast.success(t("deleteSuccess"));
-      setDeleteItem(null);
-      mutate();
-    } catch {
-      toast.error("Error");
-    }
-  }, [deleteItem, mutate, t]);
-
   return (
     <div>
-      <PageHeader title={ts("providersTitle")} description={ts("providersDesc")}>
-        <Button
-          onClick={() => {
-            setEditingItem(null);
-            setFormData({
-              name: "",
-              slug: "",
-              api_base_url: "",
-              auth_type: "api_key",
-              is_active: true,
-            });
-            setDialogOpen(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          {ts("createProvider")}
-        </Button>
-      </PageHeader>
+      <PageHeader title={ts("providersTitle")} description={ts("providersDesc")} />
 
       <DataTable
         columns={columns}
@@ -180,7 +138,7 @@ export default function SystemProvidersPage() {
         total={data?.length ?? 0}
         page={1}
         pageSize={100}
-        onPageChange={() => {}}
+        onPageChange={() => { }}
         isLoading={isLoading}
       />
 
@@ -188,7 +146,7 @@ export default function SystemProvidersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingItem ? t("edit") : t("create")} {ts("provider")}
+              {t("edit")} {ts("provider")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -199,16 +157,6 @@ export default function SystemProvidersPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("slug")}</Label>
-              <Input
-                value={formData.slug}
-                onChange={(e) =>
-                  setFormData({ ...formData, slug: e.target.value })
-                }
-                disabled={!!editingItem}
               />
             </div>
             <div className="space-y-2">
@@ -249,14 +197,6 @@ export default function SystemProvidersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={!!deleteItem}
-        onOpenChange={(o) => !o && setDeleteItem(null)}
-        title={t("deleteConfirmTitle")}
-        description={t("deleteConfirmDesc")}
-        onConfirm={handleDelete}
-      />
     </div>
   );
 }

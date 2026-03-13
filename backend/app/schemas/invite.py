@@ -3,6 +3,7 @@ Invite schemas — request/response models for invite endpoints.
 """
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
@@ -19,15 +20,13 @@ class InviteCreate(BaseModel):
 class InviteConfirm(BaseModel):
     """POST /invites/confirm — accept invite."""
     token: str
-    full_name: str
-    password: str
 
 
 class InviteResponse(BaseModel):
     """Invite response."""
-    id: str
+    id: UUID
     email: str
-    org_id: str
+    org_id: UUID
     org_role: str
     status: str
     invited_by_email: Optional[str] = None

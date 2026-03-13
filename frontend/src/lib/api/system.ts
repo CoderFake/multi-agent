@@ -9,11 +9,12 @@ import type {
   Organization,
   OrgCreateData,
   OrgUpdateData,
+  OrgMember,
+  AddMemberData,
   SystemAgent,
   AgentCreateData,
   AgentUpdateData,
   SystemProvider,
-  ProviderCreateData,
   ProviderUpdateData,
   SystemMcpServer,
   McpServerCreateData,
@@ -55,6 +56,52 @@ export function deleteOrganization(id: string) {
   return api.delete(`/system/organizations/${id}`);
 }
 
+export function fetchTimezones() {
+  return api.get<{ value: string; label: string }[]>(
+    "/system/organizations/timezones",
+  );
+}
+
+export function fetchOrgMembers(orgId: string) {
+  return api.get<OrgMember[]>(`/system/organizations/${orgId}/members`);
+}
+
+export function uploadOrgLogo(orgId: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return api.post(`/system/organizations/${orgId}/logo`, formData);
+}
+
+// ============================================================================
+// Invites
+// ============================================================================
+
+export interface Invite {
+  id: string;
+  email: string;
+  org_id: string;
+  org_role: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expires_at: string;
+  created_at: string;
+}
+
+export function createInvite(data: { email: string; org_id: string; org_role: string }) {
+  return api.post<Invite>("/invites", data);
+}
+
+export function fetchInvites(orgId: string) {
+  return api.get<Invite[]>(`/invites?org_id=${orgId}`);
+}
+
+export function revokeInvite(inviteId: string) {
+  return api.delete(`/invites/${inviteId}`);
+}
+
+export function resendInvite(inviteId: string) {
+  return api.post<Invite>(`/invites/${inviteId}/resend`);
+}
+
 // ============================================================================
 // System Agents
 // ============================================================================
@@ -83,16 +130,8 @@ export function fetchSystemProviders() {
   return api.get<SystemProvider[]>("/system/providers");
 }
 
-export function createSystemProvider(data: ProviderCreateData) {
-  return api.post<SystemProvider>("/system/providers", data);
-}
-
 export function updateSystemProvider(id: string, data: ProviderUpdateData) {
   return api.put<SystemProvider>(`/system/providers/${id}`, data);
-}
-
-export function deleteSystemProvider(id: string) {
-  return api.delete(`/system/providers/${id}`);
 }
 
 // ============================================================================

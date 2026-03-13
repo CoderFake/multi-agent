@@ -18,6 +18,7 @@ class MeResponse(BaseModel):
     full_name: str
     is_superuser: bool
     is_active: bool
+    avatar_url: str | None = None
     memberships: list["OrgMembershipResponse"]
 
     class Config:
@@ -41,3 +42,9 @@ class TokenPayload(BaseModel):
     sub: str  # user_id
     jti: str  # unique token id
     type: str  # access / refresh
+
+
+class ChangePasswordRequest(BaseModel):
+    """POST /auth/change-password"""
+    current_password: str
+    new_password: str

@@ -29,6 +29,11 @@ class CacheKeys:
         """Cache key for temp password of an invite (TTL = invite expiry)."""
         return f"invite_pwd:{invite_token[:16]}"
 
+    @staticmethod
+    def invite_fullname(invite_token: str) -> str:
+        """Cache key for invitee full name (TTL = invite expiry)."""
+        return f"invite_name:{invite_token[:16]}"
+
     # ── Organization ─────────────────────────────────────────────────────
 
     @staticmethod
@@ -40,6 +45,16 @@ class CacheKeys:
     def org_info(org_id: str) -> str:
         """Cache key for single org info."""
         return f"org:{org_id}"
+
+    @staticmethod
+    def org_users(org_id: str) -> str:
+        """Cache key for org's user/member list."""
+        return f"org_users:{org_id}"
+
+    @staticmethod
+    def org_groups(org_id: str) -> str:
+        """Cache key for org's group list."""
+        return f"org_groups:{org_id}"
 
     @staticmethod
     def org_agents(org_id: str) -> str:
@@ -87,6 +102,32 @@ class CacheKeys:
         """Cache key for agent config in an org."""
         return f"agent:{agent_id}:org:{org_id}"
 
+    @staticmethod
+    def agent_mcp_servers(agent_id: str, org_id: str) -> str:
+        """Cache key for MCP servers attached to an agent in an org."""
+        return f"agent_mcp:{agent_id}:{org_id}"
+
+    # ── Group Access Control ─────────────────────────────────────────────
+
+    @staticmethod
+    def group_agents(group_id: str, org_id: str) -> str:
+        """Cache key for agents accessible by a group."""
+        return f"group_agents:{group_id}:{org_id}"
+
+    @staticmethod
+    def group_tools(group_id: str, org_id: str) -> str:
+        """Cache key for tool access settings for a group."""
+        return f"group_tools:{group_id}:{org_id}"
+
+    @staticmethod
+    def user_accessible_agents(user_id: str, org_id: str) -> str:
+        """Cache key for resolved list of agents a user can access."""
+        return f"user_agents:{user_id}:{org_id}"
+
+    @staticmethod
+    def user_accessible_tools(user_id: str, org_id: str) -> str:
+        """Cache key for resolved list of tools a user can access."""
+        return f"user_tools:{user_id}:{org_id}"
     # ── Rate Limiting ────────────────────────────────────────────────────
 
     @staticmethod
@@ -126,3 +167,24 @@ class CacheKeys:
     def system_pattern() -> str:
         """Pattern for all system cache keys."""
         return "sys:*"
+
+    @staticmethod
+    def group_access_pattern(org_id: str, group_id: str = "") -> str:
+        """Pattern for group access cache keys."""
+        if group_id:
+            return f"group_*:{group_id}:{org_id}"
+        return f"group_*:*:{org_id}"
+
+    @staticmethod
+    def agent_mcp_pattern(org_id: str, agent_id: str = "") -> str:
+        """Pattern for agent-MCP cache keys."""
+        if agent_id:
+            return f"agent_mcp:{agent_id}:{org_id}"
+        return f"agent_mcp:*:{org_id}"
+
+    @staticmethod
+    def user_access_pattern(org_id: str, user_id: str = "") -> str:
+        """Pattern for user access cache keys."""
+        if user_id:
+            return f"user_*:{user_id}:{org_id}"
+        return f"user_*:*:{org_id}"

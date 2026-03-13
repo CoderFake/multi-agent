@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import * as authApi from "@/lib/auth";
+import { api } from "@/lib/api-client";
 import type { ApiError } from "@/lib/api-client";
 import { Loader2, Lock, Mail } from "lucide-react";
 
@@ -27,8 +28,24 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      await authApi.login({ email, password });
-      router.push("/dashboard");
+      const result = await authApi.login({ email, password });
+      api.resetExpired();
+      if (result.must_change_password) {
+        router.push("/change-password");
+      } else {
+        try {
+          const me = await authApi.getMe();
+          if (me.is_superuser) {
+            router.push("/system/organizations");
+          } else if (me.memberships?.length > 0) {
+            router.push("/dashboard");
+          } else {
+            router.push("/dashboard");
+          }
+        } catch {
+          router.push("/dashboard");
+        }
+      }
     } catch (err) {
       const apiErr = err as ApiError;
       const errorKey = apiErr.error_code || "UNKNOWN_ERROR";

@@ -22,16 +22,16 @@ function SkeletonLine({ className }: { className?: string }) {
 
 function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="rounded-lg border border-border/50 bg-card">
       {/* Header */}
-      <div className="border-b bg-muted/50 px-4 py-3 flex gap-4">
+      <div className="border-b border-border/50 bg-muted/30 px-4 py-3 flex gap-4">
         {Array.from({ length: columns }).map((_, i) => (
           <SkeletonLine key={i} className="h-4 w-24" />
         ))}
       </div>
       {/* Rows */}
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="border-b px-4 py-3 flex gap-4 last:border-b-0">
+        <div key={i} className="border-b border-border/40 px-4 py-3 flex gap-4 last:border-b-0">
           {Array.from({ length: columns }).map((_, j) => (
             <SkeletonLine
               key={j}
@@ -65,7 +65,7 @@ function PageSkeleton() {
 
 function CardSkeleton() {
   return (
-    <div className="rounded-lg border bg-card p-6 space-y-4">
+    <div className="rounded-lg border border-border/50 bg-card p-6 space-y-4">
       <SkeletonLine className="h-5 w-32" />
       <SkeletonLine className="h-4 w-full" />
       <SkeletonLine className="h-4 w-3/4" />

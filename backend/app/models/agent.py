@@ -2,7 +2,7 @@
 CMS Agent and Org-Agent models.
 """
 import uuid
-from sqlalchemy import Column, String, Boolean, Text, ForeignKey, DateTime
+from sqlalchemy import Column, String, Boolean, Text, ForeignKey, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base
@@ -21,7 +21,7 @@ class CmsAgent(Base):
     description = Column(Text, nullable=True)
     default_config = Column(JSONB, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     def __repr__(self) -> str:
         return f"<CmsAgent(codename={self.codename})>"
@@ -45,4 +45,5 @@ class CmsOrgAgent(Base):
         index=True,
     )
     is_enabled = Column(Boolean, default=True, nullable=False)
+    is_public = Column(Boolean, default=False, nullable=False)  # True → bypass group check
     config_override = Column(JSONB, nullable=True)

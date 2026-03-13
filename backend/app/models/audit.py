@@ -6,6 +6,7 @@ from sqlalchemy import Column, String, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base
+from app.utils.datetime_utils import now
 
 
 class CmsAuditLog(Base):
@@ -21,7 +22,7 @@ class CmsAuditLog(Base):
     old_values = Column(JSONB, nullable=True)
     new_values = Column(JSONB, nullable=True)
     ip_address = Column(String(50), nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=now)
 
     def __repr__(self) -> str:
         return f"<CmsAuditLog(action={self.action}, resource={self.resource_type})>"

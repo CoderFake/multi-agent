@@ -36,17 +36,17 @@ async def create_invite(
     return invite
 
 
-@router.post("/confirm", response_model=SuccessResponse)
+@router.post("/confirm")
 async def confirm_invite(
     data: InviteConfirm,
     db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
 ):
     """Confirm invitation — create user + membership (public endpoint)."""
-    user = await invite_svc.confirm_invite(
-        db, redis, token=data.token, full_name=data.full_name, password=data.password,
+    result = await invite_svc.confirm_invite(
+        db, redis, token=data.token,
     )
-    return {"message": "Invitation accepted successfully", "data": {"user_id": str(user.id)}}
+    return result
 
 
 @router.get("", response_model=list[InviteResponse])
