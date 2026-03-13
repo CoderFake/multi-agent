@@ -2,12 +2,9 @@
 MinIO/S3 storage utility — upload, delete, URL mapping.
 
 URL mapping logic:
-- Docker: internal `http://minio:9000/bucket/path` → mapped to external URL
-- Local dev: `http://localhost:9010/bucket/path`
-- Production: `{origin}/storage/bucket/path` (nginx reverse-proxy handles `minio:9000`)
-
-Backend always stores INTERNAL path (e.g. `avatars/{user_id}/photo.jpg`).
-`get_public_url()` converts to external-facing URL based on request.
+- All public URLs route through /api/v1/assets/{bucket}/{path}
+- Local dev: backend proxies to MinIO directly
+- Production: nginx can reverse-proxy /api/v1/assets/ → minio:9000
 """
 import io
 import uuid
@@ -106,21 +103,17 @@ async def delete_file(
 
 def get_public_url(
     storage_path: Optional[str],
-    request_origin: Optional[str] = None,
     bucket: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Convert internal storage path to public-facing URL.
+    Convert internal storage path to public-facing URL via assets API.
 
-    URL mapping:
-    - If MINIO_PUBLIC_URL is set → use it directly (local dev / fixed config)
-    - If request_origin is provided → use {origin}/storage/{bucket}/{path}
-      (production: nginx proxies /storage/ to minio:9000)
-    - Fallback → use MINIO_PUBLIC_URL from settings
+    Returns a URL like: {CMS_API_BASE}/assets/{bucket}/{path}
+    - Local dev:  http://localhost:8002/api/v1/assets/nws/logo/photo.jpg
+    - Production: nginx can reverse-proxy /api/v1/assets/ to minio:9000
 
     Args:
-        storage_path: Path stored in DB (e.g. "avatars/uuid/photo.jpg")
-        request_origin: Request origin (e.g. "https://app.example.com")
+        storage_path: Path stored in DB (e.g. "logo/uuid.jpg")
         bucket: Bucket name (defaults to settings.MINIO_BUCKET)
 
     Returns:
@@ -131,13 +124,9 @@ def get_public_url(
 
     bucket = bucket or settings.MINIO_BUCKET
 
-    if request_origin:
-        # Production: nginx reverse-proxy maps /storage/ → minio internal
-        return f"{request_origin.rstrip('/')}/storage/{bucket}/{storage_path}"
-
-    # Dev fallback: use configured public URL
-    public_base = settings.MINIO_PUBLIC_URL.rstrip("/")
-    return f"{public_base}/{bucket}/{storage_path}"
+    # Use the backend's own assets endpoint as proxy
+    api_base = f"http://localhost:{settings.CMS_PORT}/api/v1"
+    return f"{api_base}/assets/{bucket}/{storage_path}"
 
 
 def generate_path(prefix: str, filename: str) -> str:

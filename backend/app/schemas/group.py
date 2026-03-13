@@ -4,6 +4,8 @@ Tenant group schemas — CRUD + permission assignment.
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from app.schemas.common import CmsBaseSchema, StrUUID
+
 
 class GroupCreate(BaseModel):
     """Create a group within an org."""
@@ -17,17 +19,15 @@ class GroupUpdate(BaseModel):
     description: Optional[str] = None
 
 
-class GroupResponse(BaseModel):
+class GroupResponse(CmsBaseSchema):
     """Group info."""
-    id: str
-    org_id: Optional[str] = None
+    id: StrUUID
+    org_id: Optional[StrUUID] = None
     name: str
     description: Optional[str] = None
     is_system_default: bool = False
     member_count: int = 0
     permission_count: int = 0
-
-    model_config = {"from_attributes": True}
 
 
 class GroupListResponse(BaseModel):

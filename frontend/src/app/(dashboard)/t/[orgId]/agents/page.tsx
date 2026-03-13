@@ -19,16 +19,26 @@ import {
     useAssignAgentToGroup,
     useRevokeAgentFromGroup,
 } from "@/hooks/use-agent-access";
-import { Bot } from "lucide-react";
+import { Bot, Filter, Check } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+
+type AgentFilter = "all" | "system" | "tenant";
 
 export default function TenantAgentsPage() {
     const t = useTranslations("tenant");
     const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
+    const [filter, setFilter] = useState<AgentFilter>("all");
 
     // Data hooks
-    const { agents, mutateAgents } = useAgents();
-    const { mcpServers } = useAgentMcpServers(selectedAgentId);
+    const { agents: allAgents, mutateAgents } = useAgents();
+    const { mcpServers, mutateMcps } = useAgentMcpServers(selectedAgentId);
     const { groups } = useGroups();
     const { agentGroups, mutateAgentGroups } = useAgentGroups(selectedAgentId, groups);
 
@@ -37,14 +47,50 @@ export default function TenantAgentsPage() {
     const handleAssignGroup = useAssignAgentToGroup(mutateAgentGroups);
     const handleRevokeGroup = useRevokeAgentFromGroup(mutateAgentGroups);
 
+    // Filter agents
+    const agents = allAgents.filter((a) => {
+        if (filter === "system") return a.is_system;
+        if (filter === "tenant") return !a.is_system;
+        return true;
+    });
+
     const selectedAgent = agents.find((a) => a.id === selectedAgentId);
 
     return (
         <div className="space-y-4">
             <PageHeader title={t("agentsTitle")} description={t("agentsDesc")}>
-                <PermissionGate permission="agent.create">
-                    <CreateAgentButton onClick={() => setCreateOpen(true)} />
-                </PermissionGate>
+                <div className="flex items-center gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2">
+                                <Filter className="h-4 w-4" />
+                                {filter === "all"
+                                    ? t("allAgents")
+                                    : filter === "system"
+                                      ? t("systemAgents")
+                                      : t("tenantAgents")}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setFilter("all")} className="gap-2">
+                                {filter === "all" && <Check className="h-3.5 w-3.5" />}
+                                {t("allAgents")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setFilter("system")} className="gap-2">
+                                {filter === "system" && <Check className="h-3.5 w-3.5" />}
+                                {t("systemAgents")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setFilter("tenant")} className="gap-2">
+                                {filter === "tenant" && <Check className="h-3.5 w-3.5" />}
+                                {t("tenantAgents")}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <PermissionGate permission="agent.create">
+                        <CreateAgentButton onClick={() => setCreateOpen(true)} />
+                    </PermissionGate>
+                </div>
             </PageHeader>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -65,7 +111,12 @@ export default function TenantAgentsPage() {
                     ) : (
                         <>
                             <AgentInfoCard agent={selectedAgent} onTogglePublic={handleTogglePublic} />
-                            <AgentMcpPanel mcpServers={mcpServers} />
+
+                            {/* MCP panel — ONLY for tenant agents, NOT system agents */}
+                            {!selectedAgent.is_system && (
+                                <AgentMcpPanel agentId={selectedAgent.id} mcpServers={mcpServers} onMutate={mutateMcps} />
+                            )}
+
                             {!selectedAgent.is_public && (
                                 <AgentGroupAccess
                                     agentGroups={agentGroups}

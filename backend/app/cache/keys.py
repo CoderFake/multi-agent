@@ -25,6 +25,11 @@ class CacheKeys:
         return f"blacklist:{jti}"
 
     @staticmethod
+    def membership(user_id: str, org_id: str) -> str:
+        """Cache key for user's org membership (role + active status)."""
+        return f"membership:{user_id}:{org_id}"
+
+    @staticmethod
     def invite_password(invite_token: str) -> str:
         """Cache key for temp password of an invite (TTL = invite expiry)."""
         return f"invite_pwd:{invite_token[:16]}"
@@ -104,8 +109,13 @@ class CacheKeys:
 
     @staticmethod
     def agent_mcp_servers(agent_id: str, org_id: str) -> str:
-        """Cache key for MCP servers attached to an agent in an org."""
+        """Cache key for MCP servers assigned to an agent in an org."""
         return f"agent_mcp:{agent_id}:{org_id}"
+
+    @staticmethod
+    def agent_mcp_toolset(agent_id: str, org_id: str) -> str:
+        """Cache key for agent's full MCP toolset (servers + tools + env_overrides)."""
+        return f"agent_mcp_ts:{agent_id}:{org_id}"
 
     # ── Group Access Control ─────────────────────────────────────────────
 
@@ -164,6 +174,17 @@ class CacheKeys:
         return "perm:*"
 
     @staticmethod
+    def membership_pattern(user_id: str = "", org_id: str = "") -> str:
+        """Pattern for membership cache keys."""
+        if user_id and org_id:
+            return f"membership:{user_id}:{org_id}"
+        if user_id:
+            return f"membership:{user_id}:*"
+        if org_id:
+            return f"membership:*:{org_id}"
+        return "membership:*"
+
+    @staticmethod
     def system_pattern() -> str:
         """Pattern for all system cache keys."""
         return "sys:*"
@@ -181,6 +202,13 @@ class CacheKeys:
         if agent_id:
             return f"agent_mcp:{agent_id}:{org_id}"
         return f"agent_mcp:*:{org_id}"
+
+    @staticmethod
+    def agent_mcp_toolset_pattern(org_id: str, agent_id: str = "") -> str:
+        """Pattern for agent-MCP toolset cache keys."""
+        if agent_id:
+            return f"agent_mcp_ts:{agent_id}:{org_id}"
+        return f"agent_mcp_ts:*:{org_id}"
 
     @staticmethod
     def user_access_pattern(org_id: str, user_id: str = "") -> str:

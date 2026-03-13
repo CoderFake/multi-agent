@@ -4,16 +4,15 @@ System settings schemas — request/response models.
 from typing import Any, Optional
 from pydantic import BaseModel
 
+from app.schemas.common import CmsBaseSchema, StrUUID
 
-class SettingResponse(BaseModel):
+
+class SettingResponse(CmsBaseSchema):
     """System setting response."""
-    id: str
+    id: StrUUID
     key: str
     value: Any
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class SettingUpdate(BaseModel):

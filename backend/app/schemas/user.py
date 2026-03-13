@@ -5,17 +5,17 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from app.schemas.common import CmsBaseSchema, StrUUID
 
-class UserResponse(BaseModel):
+
+class UserResponse(CmsBaseSchema):
     """User info within an organization."""
-    user_id: str
+    user_id: StrUUID
     email: str
     full_name: str
     org_role: str
     is_active: bool
     joined_at: Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
 
 
 class UserListResponse(BaseModel):

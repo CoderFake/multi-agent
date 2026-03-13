@@ -60,6 +60,7 @@ export interface SystemAgent {
   description: string | null;
   default_config: Record<string, unknown> | null;
   is_active: boolean;
+  is_public: boolean;
   created_at: string;
 }
 
@@ -74,6 +75,21 @@ export interface AgentUpdateData {
   display_name?: string;
   description?: string;
   is_active?: boolean;
+  is_public?: boolean;
+}
+
+export interface AgentOrgItem {
+  org_id: string;
+  org_name: string;
+  is_enabled: boolean;
+}
+
+export interface AgentToolItem {
+  id: string;
+  codename: string;
+  display_name: string;
+  description: string | null;
+  server_name: string;
 }
 
 // ============================================================================
@@ -107,7 +123,9 @@ export interface SystemMcpServer {
   display_name: string;
   transport: string;
   connection_config: Record<string, unknown> | null;
+  requires_env_vars: boolean;
   is_active: boolean;
+  is_public: boolean;
   created_at: string;
 }
 
@@ -116,14 +134,41 @@ export interface McpServerCreateData {
   display_name: string;
   transport: string;
   connection_config?: Record<string, unknown> | null;
+  requires_env_vars?: boolean;
   is_active?: boolean;
+  is_public?: boolean;
 }
 
 export interface McpServerUpdateData {
   display_name?: string;
   transport?: string;
   connection_config?: Record<string, unknown> | null;
+  requires_env_vars?: boolean;
   is_active?: boolean;
+  is_public?: boolean;
+}
+
+export interface DiscoveredTool {
+  name: string;
+  description: string | null;
+  input_schema: Record<string, unknown> | null;
+}
+
+export interface McpDiscoverResponse {
+  server_name: string;
+  tools: DiscoveredTool[];
+  error: string | null;
+}
+
+export interface McpToolResponse {
+  id: string;
+  mcp_server_id: string;
+  codename: string;
+  display_name: string;
+  description: string | null;
+  input_schema: Record<string, unknown> | null;
+  is_active: boolean;
+  created_at: string;
 }
 
 // ============================================================================
@@ -317,6 +362,17 @@ export interface AgentMcpServer {
   mcp_server_codename: string;
   mcp_server_name: string;
   is_active: boolean;
+  env_overrides: Record<string, string> | null;
+  requires_env_vars: boolean;
+  connection_config: Record<string, unknown> | null;
+}
+
+export interface AvailableMcpServer {
+    id: string;
+    codename: string;
+    display_name: string;
+    transport: string;
+    requires_env_vars: boolean;
 }
 
 export interface GroupAgent {

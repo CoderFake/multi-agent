@@ -66,7 +66,7 @@ class OrganizationService:
                 "name": org.name,
                 "slug": org.slug,
                 "subdomain": org.subdomain,
-                "logo_url": org.logo_url,
+                "logo_url": get_public_url(org.logo_url, bucket=org.subdomain or org.slug),
                 "timezone": org.timezone,
                 "is_active": org.is_active,
                 "created_at": org.created_at,
@@ -263,7 +263,7 @@ class OrganizationService:
         return members
 
     async def upload_logo(
-        self, db: AsyncSession, org_id: str, file: UploadFile,
+        self, db: AsyncSession, cache: CacheService, org_id: str, file: UploadFile,
     ) -> str:
         """Upload org logo to S3 using org's subdomain as bucket."""
         allowed_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -298,6 +298,10 @@ class OrganizationService:
         # Save to DB
         org.logo_url = storage_path
         await db.commit()
+
+        # Invalidate org cache so next GET returns updated logo_url
+        invalidation = CacheInvalidation(cache)
+        await invalidation.clear_org_info(org_id)
 
         return get_public_url(storage_path, bucket=bucket)
 

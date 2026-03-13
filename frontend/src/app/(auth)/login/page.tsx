@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { TypewriterText } from "@/components/typewriter-text";
 import * as authApi from "@/lib/auth";
 import { api } from "@/lib/api-client";
 import type { ApiError } from "@/lib/api-client";
-import { Loader2, Lock, Mail } from "lucide-react";
+import { Loader2, CircleAlert } from "lucide-react";
 
 export default function LoginPage() {
   const t = useTranslations();
@@ -58,86 +57,87 @@ export default function LoginPage() {
   return (
     <>
       {/* Top-right controls */}
-      <div className="fixed top-4 right-4 flex items-center gap-2">
+      <div className="fixed top-4 right-4 flex items-center gap-2 z-10">
         <LocaleSwitcher />
         <ThemeToggle />
       </div>
 
-      <Card className="border-border/50 shadow-xl">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <Lock className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-2xl font-bold">{t("auth.loginTitle")}</CardTitle>
-          <CardDescription>{t("auth.loginSubtitle")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="w-full max-w-sm">
+        {/* Title with typewriter effect */}
+        <div className="mb-8">
+          <h1 className="font-serif text-3xl text-foreground">
+            <TypewriterText
+              text={"Agent CMS.\nPlease sign in to continue"}
+              speed={40}
+              startDelay={200}
+            />
+          </h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
             {error && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <div className="flex items-center justify-center gap-2 text-sm text-destructive">
+                <CircleAlert className="size-4 shrink-0" />
                 {error}
               </div>
             )}
+            <Input
+              id="email"
+              type="email"
+              placeholder={t("auth.email")}
+              aria-label={t("auth.email")}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={isLoading}
+              autoFocus
+              autoComplete="email"
+              className="h-12 rounded-full px-5"
+            />
+            <Input
+              id="password"
+              type="password"
+              placeholder={t("auth.password")}
+              aria-label={t("auth.password")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={isLoading}
+              autoComplete="current-password"
+              className="h-12 rounded-full px-5"
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("auth.email")}</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                  autoFocus
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">{t("auth.password")}</Label>
-                <a
-                  href="/forgot-password"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  {t("auth.forgotPassword")}
-                </a>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("auth.loggingIn")}
-                </>
-              ) : (
-                t("auth.loginButton")
-              )}
+          <div className="space-y-4">
+            <Button
+              type="submit"
+              className="h-12 w-full rounded-full bg-foreground text-background hover:bg-foreground/90"
+              disabled={isLoading}
+            >
+              {isLoading && <Loader2 className="animate-spin mr-2" />}
+              {isLoading ? t("auth.loggingIn") : t("auth.loginButton")}
             </Button>
-          </form>
-        </CardContent>
-      </Card>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        Multi-Agent CMS &copy; {new Date().getFullYear()}
-      </p>
+            {/* OR CONTINUE WITH divider */}
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                 {/* text */}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-center text-sm text-muted-foreground pt-2">
+              Multi-Agent CMS &copy; {new Date().getFullYear()}
+            </p>
+          </div>
+        </form>
+      </div>
     </>
   );
 }
+

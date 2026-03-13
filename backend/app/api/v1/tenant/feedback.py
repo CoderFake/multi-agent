@@ -41,7 +41,6 @@ async def submit_feedback(
 
 @router.get("")
 async def list_feedback(
-    request: Request,
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -49,9 +48,8 @@ async def list_feedback(
     user: CurrentUser = Depends(require_superuser),
 ):
     """List all feedback (superuser/admin only)."""
-    origin = get_request_origin(request)
     items, total = await feedback_svc.list_all_feedback(
-        db, status, page, page_size, origin,
+        db, status, page, page_size,
     )
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 

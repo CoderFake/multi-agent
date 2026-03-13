@@ -24,9 +24,17 @@ export function UserNav() {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
-              {user?.full_name?.charAt(0).toUpperCase() ?? "U"}
-            </div>
+            {user?.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.full_name || "User"}
+                className="h-7 w-7 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">
+                {user?.full_name?.charAt(0).toUpperCase() ?? "U"}
+              </div>
+            )}
             <span className="hidden md:inline-block text-sm truncate max-w-[120px]">
               {user?.full_name}
             </span>

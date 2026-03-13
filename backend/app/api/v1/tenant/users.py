@@ -5,7 +5,7 @@ Requires org membership (require_org_membership).
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db_session, get_cache_service, require_org_membership
+from app.core.dependencies import get_db_session, get_cache_service, require_org_membership, require_permission
 from app.common.types import CurrentUser
 from app.cache.service import CacheService
 from app.schemas.user import UserResponse, UserListResponse, UserUpdate
@@ -44,11 +44,13 @@ async def update_user(
     data: UserUpdate,
     db: AsyncSession = Depends(get_db_session),
     cache: CacheService = Depends(get_cache_service),
-    user: CurrentUser = Depends(require_org_membership),
+    user: CurrentUser = Depends(require_permission("user.update")),
 ):
     """Update user role or active status within the org."""
     return await tenant_user_svc.update_user(
         db, cache, user.org_id, user_id,
+        acting_user_id=user.user_id,
+        acting_user_role=user.org_role,
         **data.model_dump(exclude_unset=True),
     )
 
@@ -58,7 +60,11 @@ async def remove_user(
     user_id: str,
     db: AsyncSession = Depends(get_db_session),
     cache: CacheService = Depends(get_cache_service),
-    user: CurrentUser = Depends(require_org_membership),
+    user: CurrentUser = Depends(require_permission("user.delete")),
 ):
     """Remove a user from the org."""
-    await tenant_user_svc.remove_member(db, cache, user.org_id, user_id)
+    await tenant_user_svc.remove_member(
+        db, cache, user.org_id, user_id,
+        acting_user_id=user.user_id,
+        acting_user_role=user.org_role,
+    )

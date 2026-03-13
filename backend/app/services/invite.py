@@ -22,6 +22,8 @@ from app.utils.logging import get_logger
 from app.utils.request_utils import build_org_frontend_url
 from app.services.notification import notification_svc
 from app.utils.email_queue import queue_email
+from app.cache.service import CacheService
+from app.cache.invalidation import CacheInvalidation
 
 logger = get_logger(__name__)
 
@@ -301,6 +303,15 @@ class InviteService:
         await redis.delete(fullname_key)
 
         await db.commit()
+
+        # ── Invalidate caches so new member appears immediately ─────────
+
+
+        cache_svc = CacheService(redis)
+        inv = CacheInvalidation(cache_svc)
+        await inv.clear_org_users(str(invite.org_id))
+        await inv.clear_org_memberships(str(invite.org_id))
+        await inv.clear_membership(str(user.id), str(invite.org_id))
 
         # ── Notify inviter (superuser) ──────────────────────────────────
         try:

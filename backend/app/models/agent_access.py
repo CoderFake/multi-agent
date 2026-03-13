@@ -3,14 +3,14 @@ CMS Agent Access Control models.
 Group → Agent, Agent → MCP, Group → Tool access.
 """
 import uuid
-from sqlalchemy import Column, Boolean, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Boolean, ForeignKey, DateTime, func
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base
 
 
 class CmsAgentMcpServer(Base):
-    """M2M: Which MCP servers are attached to an agent within an org."""
+    """M2M: Which MCP servers are assigned to an agent within an org."""
     __tablename__ = "cms_agent_mcp_server"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -33,10 +33,34 @@ class CmsAgentMcpServer(Base):
         index=True,
     )
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
+    env_overrides = Column(JSONB, nullable=True)  # e.g. {"API_KEY": "value"}
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     def __repr__(self) -> str:
         return f"<CmsAgentMcpServer(agent={self.agent_id}, mcp={self.mcp_server_id})>"
+
+
+class CmsOrgMcpServer(Base):
+    """M2M: Which system MCP servers are assigned to which organizations."""
+    __tablename__ = "cms_org_mcp_server"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cms_organization.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    mcp_server_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cms_mcp_server.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    def __repr__(self) -> str:
+        return f"<CmsOrgMcpServer(org={self.org_id}, mcp={self.mcp_server_id})>"
 
 
 class CmsGroupAgent(Base):

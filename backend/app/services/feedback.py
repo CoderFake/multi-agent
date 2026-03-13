@@ -86,7 +86,6 @@ class FeedbackService:
         self, db: AsyncSession,
         status: Optional[str] = None,
         page: int = 1, page_size: int = 20,
-        request_origin: Optional[str] = None,
     ) -> tuple[list[dict], int]:
         """List all platform feedback (superuser view) with user info and public URLs."""
         query = (
@@ -113,7 +112,7 @@ class FeedbackService:
             public_attachments = None
             if fb.attachments:
                 public_attachments = [
-                    get_public_url(p, request_origin, bucket=settings.BUCKET_SYSTEM) for p in fb.attachments
+                    get_public_url(p, bucket=settings.BUCKET_SYSTEM) for p in fb.attachments
                 ]
 
             items.append({

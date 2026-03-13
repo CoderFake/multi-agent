@@ -5,16 +5,15 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.common import CmsBaseSchema, StrUUID
 
-class PermissionResponse(BaseModel):
+
+class PermissionResponse(CmsBaseSchema):
     """Permission response."""
-    id: str
+    id: StrUUID
     codename: str
     name: str
     content_type: str  # "app_label.model"
-
-    class Config:
-        from_attributes = True
 
 
 class PermCheckRequest(BaseModel):
@@ -33,15 +32,15 @@ class PermCheckResponse(BaseModel):
 
 class UserPermissionsResponse(BaseModel):
     """All resolved permissions for a user in an org."""
-    user_id: str
-    org_id: str
+    user_id: StrUUID
+    org_id: StrUUID
     permissions: list[str]  # list of codenames
     groups: list[str]  # list of group names
 
 
 class UIPermissionsResponse(BaseModel):
     """UI-specific permissions for frontend rendering."""
-    user_id: str
-    org_id: str
+    user_id: StrUUID
+    org_id: StrUUID
     nav_items: list[str]  # visible nav item codenames
     actions: dict[str, list[str]]  # resource_type → allowed actions

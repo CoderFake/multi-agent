@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/tenant";
 import { useCurrentOrg } from "@/contexts/org-context";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useErrorToast } from "@/hooks/use-error-toast";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export default function GroupDetailPage() {
     const groupId = params.groupId as string;
     const { orgId } = useCurrentOrg();
     const { hasPermission } = usePermissions();
+    const { showError } = useErrorToast();
 
     // Add member dialog
     const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -65,12 +67,12 @@ export default function GroupDetailPage() {
 
     // Data fetching
     const { data: members, mutate: mutateMembers } = useSWR(
-        groupId ? ["group-members", groupId] : null,
+        orgId && groupId ? ["group-members", orgId, groupId] : null,
         () => fetchGroupMembers(groupId),
     );
 
     const { data: groupPerms, mutate: mutatePerms } = useSWR(
-        groupId ? ["group-permissions", groupId] : null,
+        orgId && groupId ? ["group-permissions", orgId, groupId] : null,
         () => fetchGroupPermissions(groupId),
     );
 
@@ -106,8 +108,8 @@ export default function GroupDetailPage() {
             setAddMemberOpen(false);
             setSelectedUserId("");
             mutateMembers();
-        } catch {
-            toast.error(t("error"));
+        } catch (err) {
+            showError(err);
         } finally {
             setAddingMember(false);
         }
@@ -120,8 +122,8 @@ export default function GroupDetailPage() {
             toast.success(tg("memberRemoved"));
             setRemoveMember(null);
             mutateMembers();
-        } catch {
-            toast.error(t("error"));
+        } catch (err) {
+            showError(err);
         }
     }, [groupId, removeMember, mutateMembers, tg, t]);
 
@@ -134,8 +136,8 @@ export default function GroupDetailPage() {
             setAssignOpen(false);
             setSelectedPermIds([]);
             mutatePerms();
-        } catch {
-            toast.error(t("error"));
+        } catch (err) {
+            showError(err);
         } finally {
             setAssigningPerms(false);
         }
@@ -147,8 +149,8 @@ export default function GroupDetailPage() {
                 await revokeGroupPermissions(groupId, [permId]);
                 toast.success(tg("permissionRevoked"));
                 mutatePerms();
-            } catch {
-                toast.error(t("error"));
+            } catch (err) {
+                showError(err);
             }
         },
         [groupId, mutatePerms, tg, t],

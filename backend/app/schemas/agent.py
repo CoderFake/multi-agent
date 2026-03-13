@@ -6,6 +6,8 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
+from app.schemas.common import CmsBaseSchema, StrUUID
+
 
 class AgentCreate(BaseModel):
     """POST /system/agents."""
@@ -21,18 +23,42 @@ class AgentUpdate(BaseModel):
     description: Optional[str] = None
     default_config: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
+    is_public: Optional[bool] = None
 
 
-class AgentResponse(BaseModel):
+class AgentResponse(CmsBaseSchema):
     """Agent response."""
-    id: str
+    id: StrUUID
     codename: str
     display_name: str
     description: Optional[str] = None
     default_config: Optional[dict[str, Any]] = None
     is_active: bool
-    org_id: Optional[str] = None  # None = system agent
+    is_public: bool = False
+    org_id: Optional[StrUUID] = None  # None = system agent
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+
+class AgentOrgAssignment(BaseModel):
+    """PUT /system/agents/{id}/orgs — bulk assign orgs."""
+    org_ids: list[str]
+
+
+class AgentOrgResponse(CmsBaseSchema):
+    """Org assignment for an agent."""
+    org_id: StrUUID
+    org_name: str
+    is_enabled: bool
+
+
+class AgentToolResponse(CmsBaseSchema):
+    """Tool assigned to a system agent."""
+    id: StrUUID
+    codename: str
+    display_name: str
+    description: Optional[str] = None
+    server_name: str
+
+
+class SetPublicBody(BaseModel):
+    is_public: bool

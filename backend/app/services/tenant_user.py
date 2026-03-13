@@ -17,6 +17,7 @@ from app.models.user import CmsUser
 from app.models.organization import CmsOrgMembership
 from app.utils.logging import get_logger
 from app.services.notification import notification_svc
+from app.common.constants import ROLE_HIERARCHY
 
 logger = get_logger(__name__)
 
@@ -79,9 +80,12 @@ class TenantUserService:
 
     async def update_user(
         self, db: AsyncSession, cache: CacheService,
-        org_id: str, user_id: str, **kwargs,
+        org_id: str, user_id: str,
+        acting_user_id: str | None = None,
+        acting_user_role: str | None = None,
+        **kwargs,
     ) -> dict:
-        """Update user membership (role, active status). Invalidates caches."""
+        """Update user membership (role, active status). Enforces role hierarchy."""
         result = await db.execute(
             select(CmsOrgMembership).where(
                 CmsOrgMembership.org_id == org_id,
@@ -96,6 +100,30 @@ class TenantUserService:
                 status_code=404,
             )
 
+        # ── Role hierarchy enforcement ──────────────────────────────
+        if acting_user_role and acting_user_role != "superuser":
+            actor_level = ROLE_HIERARCHY.get(acting_user_role, 0)
+            target_level = ROLE_HIERARCHY.get(membership.org_role, 0)
+
+            # Cannot edit someone with equal or higher role
+            if target_level >= actor_level:
+                raise CmsException(
+                    error_code=ErrorCode.AUTH_FORBIDDEN,
+                    detail="Cannot modify a user with equal or higher role",
+                    status_code=403,
+                )
+
+            # Cannot assign a role equal or higher than your own
+            new_role = kwargs.get("org_role")
+            if new_role:
+                new_level = ROLE_HIERARCHY.get(new_role, 0)
+                if new_level >= actor_level:
+                    raise CmsException(
+                        error_code=ErrorCode.AUTH_FORBIDDEN,
+                        detail="Cannot assign a role equal to or higher than your own",
+                        status_code=403,
+                    )
+
         for key, value in kwargs.items():
             if value is not None and hasattr(membership, key):
                 setattr(membership, key, value)
@@ -103,11 +131,12 @@ class TenantUserService:
         await db.commit()
         await db.refresh(membership)
 
-        # Invalidate: user list + user permissions (role change may affect perms)
+        # Invalidate: user list + user permissions (role change may affect perms) + membership
         inv = CacheInvalidation(cache)
         await inv.clear_org_users(org_id)
         await inv.clear_user_permissions(user_id, org_id)
         await inv.clear_user_info(user_id)
+        await inv.clear_membership(user_id, org_id)
 
         # Notify user about role change
         if 'org_role' in kwargs and kwargs['org_role'] is not None:
@@ -124,8 +153,10 @@ class TenantUserService:
     async def remove_member(
         self, db: AsyncSession, cache: CacheService,
         org_id: str, user_id: str,
+        acting_user_id: str | None = None,
+        acting_user_role: str | None = None,
     ) -> None:
-        """Remove a user from the organization. Cascading invalidation."""
+        """Remove a user from the organization. Enforces role hierarchy."""
         result = await db.execute(
             select(CmsOrgMembership).where(
                 CmsOrgMembership.org_id == org_id,
@@ -140,14 +171,27 @@ class TenantUserService:
                 status_code=404,
             )
 
+        # ── Role hierarchy enforcement ──────────────────────────────
+        if acting_user_role and acting_user_role != "superuser":
+            actor_level = ROLE_HIERARCHY.get(acting_user_role, 0)
+            target_level = ROLE_HIERARCHY.get(membership.org_role, 0)
+
+            if target_level >= actor_level:
+                raise CmsException(
+                    error_code=ErrorCode.AUTH_FORBIDDEN,
+                    detail="Cannot remove a user with equal or higher role",
+                    status_code=403,
+                )
+
         await db.delete(membership)
         await db.commit()
 
-        # Cascading invalidation: user list + user info + user perms + org groups (member counts)
+        # Cascading invalidation: user list + user info + user perms + membership + org groups
         inv = CacheInvalidation(cache)
         await inv.clear_org_users(org_id)
         await inv.clear_user_info(user_id)
         await inv.clear_user_permissions(user_id, org_id)
+        await inv.clear_membership(user_id, org_id)
         await inv.clear_org_groups(org_id)  # member counts change
 
         logger.info(f"Removed user {user_id} from org {org_id}")

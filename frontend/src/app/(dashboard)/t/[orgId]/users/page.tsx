@@ -43,12 +43,15 @@ import { Badge } from "@/components/ui/badge";
 import { UserPlus } from "lucide-react";
 
 const ROLES = ["owner", "admin", "member"] as const;
+const ROLE_LEVEL: Record<string, number> = { member: 1, admin: 2, owner: 3 };
 
 export default function TenantUsersPage() {
     const t = useTranslations("common");
     const tu = useTranslations("tenant");
-    const { orgId } = useCurrentOrg();
+    const { orgId, orgRole } = useCurrentOrg();
     const { hasPermission } = usePermissions();
+    const isSuperuser = orgRole === "superuser";
+    const myLevel = isSuperuser ? 99 : (ROLE_LEVEL[orgRole ?? ""] ?? 0);
     const [page, setPage] = useState(1);
     const [search, setSearch] = useState("");
 
@@ -112,24 +115,10 @@ export default function TenantUsersPage() {
             id: "actions",
             header: "",
             cell: ({ row }) => {
-                const actions: { label: string; onClick: () => void; variant?: "destructive" }[] = [];
-                if (hasPermission("user.update")) {
-                    actions.push({
-                        label: tu("editRole"),
-                        onClick: () => {
-                            setEditUser(row.original);
-                            setEditRole(row.original.org_role);
-                        },
-                    });
-                }
-                if (hasPermission("user.delete")) {
-                    actions.push({
-                        label: t("delete"),
-                        onClick: () => setRemoveUser(row.original),
-                        variant: "destructive",
-                    });
-                }
-                if (actions.length === 0) return null;
+                const targetLevel = ROLE_LEVEL[row.original.org_role] ?? 0;
+                const canManage = isSuperuser || targetLevel < myLevel;
+                if (!canManage) return null;
+
                 return (
                     <ActionDropdown
                         onEdit={
@@ -251,7 +240,7 @@ export default function TenantUsersPage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {ROLES.map((r) => (
+                                    {ROLES.filter((r) => isSuperuser || ROLE_LEVEL[r] < myLevel).map((r) => (
                                         <SelectItem key={r} value={r}>
                                             {r}
                                         </SelectItem>
@@ -288,7 +277,7 @@ export default function TenantUsersPage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {ROLES.map((r) => (
+                                    {ROLES.filter((r) => isSuperuser || ROLE_LEVEL[r] < myLevel).map((r) => (
                                         <SelectItem key={r} value={r}>
                                             {r}
                                         </SelectItem>

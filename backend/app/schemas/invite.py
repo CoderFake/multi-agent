@@ -3,11 +3,11 @@ Invite schemas — request/response models for invite endpoints.
 """
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
 from app.common.enums import OrgRole
+from app.schemas.common import CmsBaseSchema, StrUUID
 
 
 class InviteCreate(BaseModel):
@@ -22,19 +22,16 @@ class InviteConfirm(BaseModel):
     token: str
 
 
-class InviteResponse(BaseModel):
+class InviteResponse(CmsBaseSchema):
     """Invite response."""
-    id: UUID
+    id: StrUUID
     email: str
-    org_id: UUID
+    org_id: StrUUID
     org_role: str
     status: str
     invited_by_email: Optional[str] = None
     expires_at: datetime
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class InviteResend(BaseModel):

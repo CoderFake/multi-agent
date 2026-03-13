@@ -10,13 +10,24 @@ from app.core.dependencies import get_db_session, get_cache_service, require_org
 from app.common.types import CurrentUser
 from app.cache.service import CacheService
 from app.schemas.agent_access import (
-    AgentMcpAttach, GroupAgentAssign,
+    AgentMcpAssign, AgentMcpEnvUpdate, GroupAgentAssign,
     GroupToolToggle, GroupToolBulkToggle,
     OrgAgentPublicToggle,
 )
 from app.services.tenant_agent_access import tenant_agent_access_svc
 
 router = APIRouter(prefix="/access", tags=["tenant-access-control"])
+
+
+# ── Available MCP Servers ────────────────────────────────────────────────
+
+@router.get("/available-mcp-servers")
+async def list_available_mcp_servers(
+    db: AsyncSession = Depends(get_db_session),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """List MCP servers available to this org (public + assigned)."""
+    return await tenant_agent_access_svc.list_available_mcp_servers(db, user.org_id)
 
 
 # ── Agent ↔ MCP Server ──────────────────────────────────────────────────
@@ -28,35 +39,50 @@ async def list_agent_mcp_servers(
     cache: CacheService = Depends(get_cache_service),
     user: CurrentUser = Depends(require_org_membership),
 ):
-    """List MCP servers attached to an agent."""
+    """List MCP servers assigned to an agent."""
     return await tenant_agent_access_svc.list_agent_mcp_servers(db, cache, user.org_id, agent_id)
 
 
 @router.post("/agents/{agent_id}/mcp-servers", status_code=201)
-async def attach_mcp_to_agent(
+async def assign_mcp_to_agent(
     agent_id: str,
-    data: AgentMcpAttach,
+    data: AgentMcpAssign,
     db: AsyncSession = Depends(get_db_session),
     cache: CacheService = Depends(get_cache_service),
     user: CurrentUser = Depends(require_org_membership),
 ):
-    """Attach an MCP server to an agent."""
-    return await tenant_agent_access_svc.attach_mcp_to_agent(
-        db, cache, user.org_id, agent_id, data.mcp_server_id,
+    """Assign an MCP server to an agent."""
+    return await tenant_agent_access_svc.assign_mcp_to_agent(
+        db, cache, user.org_id, agent_id, data.mcp_server_id, data.env_overrides,
     )
 
 
 @router.delete("/agents/{agent_id}/mcp-servers/{mcp_server_id}", status_code=204)
-async def detach_mcp_from_agent(
+async def revoke_mcp_from_agent(
     agent_id: str,
     mcp_server_id: str,
     db: AsyncSession = Depends(get_db_session),
     cache: CacheService = Depends(get_cache_service),
     user: CurrentUser = Depends(require_org_membership),
 ):
-    """Detach an MCP server from an agent."""
-    await tenant_agent_access_svc.detach_mcp_from_agent(
+    """Revoke an MCP server from an agent."""
+    await tenant_agent_access_svc.revoke_mcp_from_agent(
         db, cache, user.org_id, agent_id, mcp_server_id,
+    )
+
+
+@router.patch("/agents/{agent_id}/mcp-servers/{mcp_server_id}/env")
+async def update_agent_mcp_env(
+    agent_id: str,
+    mcp_server_id: str,
+    data: AgentMcpEnvUpdate,
+    db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
+    user: CurrentUser = Depends(require_org_membership),
+):
+    """Update env overrides for an agent-MCP link."""
+    return await tenant_agent_access_svc.update_agent_mcp_env(
+        db, cache, user.org_id, agent_id, mcp_server_id, data.env_overrides,
     )
 
 

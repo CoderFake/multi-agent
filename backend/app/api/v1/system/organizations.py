@@ -137,8 +137,9 @@ async def upload_logo(
     org_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db_session),
+    cache: CacheService = Depends(get_cache_service),
     user: CurrentUser = Depends(require_superuser),
 ):
     """Upload organization logo."""
-    logo_url = await org_svc.upload_logo(db, org_id, file)
+    logo_url = await org_svc.upload_logo(db, cache, org_id, file)
     return {"message": "Logo uploaded successfully", "data": {"logo_url": logo_url}}

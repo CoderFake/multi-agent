@@ -41,7 +41,9 @@ class Settings(BaseSettings):
     CACHE_AGENT_TTL: int = 3600
     CACHE_PROVIDER_TTL: int = 7200      # 2 hours
     CACHE_BLACKLIST_TTL: int = 86400    # 24 hours
-
+    CACHE_AGENT_MCP_TOOLSET_TTL: int = 3600  # 1 hour — runtime MCP toolset
+    AUTH_CACHE_TTL: int = 300           # 5 minutes
+    
     # ── Invite Settings ──────────────────────────────────────────────────
     INVITE_EXPIRE_HOURS: int = 72       # 3 days
     INVITE_TEMP_PASSWORD_LENGTH: int = 16

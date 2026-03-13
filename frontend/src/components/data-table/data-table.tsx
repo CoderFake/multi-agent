@@ -22,6 +22,7 @@ interface DataTableProps<TData> {
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  onRowClick?: (row: TData) => void;
 }
 
 export function DataTable<TData>({
@@ -35,6 +36,7 @@ export function DataTable<TData>({
   isLoading = false,
   emptyTitle,
   emptyDescription,
+  onRowClick,
 }: DataTableProps<TData>) {
   const t = useTranslations("common");
 
@@ -113,7 +115,10 @@ export function DataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-b border-border/40 last:border-b-0 transition-colors hover:bg-muted/30"
+                    className={`border-b border-border/40 last:border-b-0 transition-colors hover:bg-muted/30${
+                      onRowClick ? " cursor-pointer" : ""
+                    }`}
+                    onClick={() => onRowClick?.(row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3">

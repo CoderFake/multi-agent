@@ -7,18 +7,18 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.common import CmsBaseSchema, StrUUID
 
-class NotificationResponse(BaseModel):
+
+class NotificationResponse(CmsBaseSchema):
     """Single notification."""
-    id: str
+    id: StrUUID
     type: str
     title_code: str          # i18n key, e.g. "notification.role_changed"
     message_code: Optional[str] = None  # i18n key, e.g. "notification.role_changed_desc"
     data: Optional[dict] = None  # dynamic params for i18n interpolation
     is_read: bool
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class NotificationListResponse(BaseModel):

@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from app.schemas.common import CmsBaseSchema, StrUUID
+
 
 class ProviderCreate(BaseModel):
     """POST /system/providers."""
@@ -23,16 +25,13 @@ class ProviderUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ProviderResponse(BaseModel):
+class ProviderResponse(CmsBaseSchema):
     """Provider response."""
-    id: str
+    id: StrUUID
     name: str
     slug: str
     api_base_url: Optional[str] = None
     auth_type: str
     is_active: bool
-    org_id: Optional[str] = None
+    org_id: Optional[StrUUID] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True

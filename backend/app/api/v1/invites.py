@@ -1,12 +1,13 @@
 """
 Invite API — create, confirm, revoke, resend invitations.
 Thin router — all logic in invite_svc.
+Uses permission-based access control (invite.create, invite.view, etc.).
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
-from app.core.dependencies import get_db_session, get_redis, get_cache_service, require_superuser, get_current_user
+from app.core.dependencies import get_db_session, get_redis, require_permission, get_current_user
 from app.common.types import CurrentUser
 from app.schemas.invite import InviteCreate, InviteConfirm, InviteResponse
 from app.schemas.common import SuccessResponse
@@ -22,9 +23,9 @@ async def create_invite(
     data: InviteCreate,
     db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
-    user: CurrentUser = Depends(require_superuser),
+    user: CurrentUser = Depends(require_permission("invite.create")),
 ):
-    """Create an invitation (superuser or org admin)."""
+    """Create an invitation (owner, admin, or users with invite.create permission)."""
     invite = await invite_svc.create_invite(
         db, redis, email=data.email, org_id=data.org_id,
         org_role=data.org_role.value, invited_by=user.user_id,
@@ -54,7 +55,7 @@ async def list_invites(
     org_id: str,
     status: str | None = None,
     db: AsyncSession = Depends(get_db_session),
-    user: CurrentUser = Depends(require_superuser),
+    user: CurrentUser = Depends(require_permission("invite.view")),
 ):
     """List invites for an org."""
     invites = await invite_svc.list_invites(db, org_id, status)
@@ -66,7 +67,7 @@ async def revoke_invite(
     invite_id: str,
     db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
-    user: CurrentUser = Depends(require_superuser),
+    user: CurrentUser = Depends(require_permission("invite.revoke")),
 ):
     """Revoke a pending invitation."""
     await invite_svc.revoke_invite(db, redis, invite_id)
@@ -79,7 +80,7 @@ async def resend_invite(
     invite_id: str,
     db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
-    user: CurrentUser = Depends(require_superuser),
+    user: CurrentUser = Depends(require_permission("invite.resend")),
 ):
     """Resend invitation with new token."""
     invite = await invite_svc.resend_invite(db, redis, invite_id)

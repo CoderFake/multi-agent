@@ -248,3 +248,10 @@ class Timezone:
     ]
 
     VALUES: list[str] = [tz["value"] for tz in ALL]
+
+
+ROLE_HIERARCHY = {
+    "member": 1,
+    "admin": 2,
+    "owner": 3,
+}

@@ -5,7 +5,7 @@ Uses Redis → DB pattern with cache invalidation on mutations.
 """
 from datetime import datetime, timezone
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import CmsException
@@ -16,7 +16,8 @@ from app.cache.invalidation import CacheInvalidation
 from app.config.settings import settings
 from app.models.agent import CmsOrgAgent
 from app.models.mcp import CmsMcpServer, CmsTool
-from app.models.agent_access import CmsAgentMcpServer, CmsGroupAgent, CmsGroupToolAccess
+from app.models.agent import CmsAgent
+from app.models.agent_access import CmsAgentMcpServer, CmsGroupAgent, CmsGroupToolAccess, CmsOrgMcpServer
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,12 +26,41 @@ logger = get_logger(__name__)
 class TenantAgentAccessService:
     """Agent access control within an org."""
 
-    # ── Agent ↔ MCP Server ──────────────────────────────────────────────
+    # ── Available MCP Servers for org ────────────────────────────────────
+
+    async def list_available_mcp_servers(
+        self, db: AsyncSession, org_id: str,
+    ) -> list[dict]:
+        """List MCP servers available to this org: public system servers + explicitly assigned."""
+        result = await db.execute(
+            select(CmsMcpServer).where(
+                CmsMcpServer.org_id.is_(None),  # system servers only
+                CmsMcpServer.is_active == True,
+                or_(
+                    CmsMcpServer.is_public == True,
+                    CmsMcpServer.id.in_(
+                        select(CmsOrgMcpServer.mcp_server_id).where(
+                            CmsOrgMcpServer.org_id == org_id
+                        )
+                    ),
+                ),
+            )
+        )
+        return [
+            {
+                "id": str(s.id),
+                "codename": s.codename,
+                "display_name": s.display_name,
+                "transport": s.transport,
+                "requires_env_vars": s.requires_env_vars,
+            }
+            for s in result.scalars().all()
+        ]
 
     async def list_agent_mcp_servers(
         self, db: AsyncSession, cache: CacheService, org_id: str, agent_id: str,
     ) -> list[dict]:
-        """List MCP servers attached to an agent. Cached."""
+        """List MCP servers assigned to an agent. Cached."""
         cache_key = CacheKeys.agent_mcp_servers(agent_id, org_id)
 
         async def _fetch():
@@ -50,18 +80,21 @@ class TenantAgentAccessService:
                     "mcp_server_codename": row.CmsMcpServer.codename,
                     "mcp_server_name": row.CmsMcpServer.display_name,
                     "is_active": row.CmsAgentMcpServer.is_active,
+                    "env_overrides": row.CmsAgentMcpServer.env_overrides,
+                    "requires_env_vars": row.CmsMcpServer.requires_env_vars,
+                    "connection_config": row.CmsMcpServer.connection_config,
                 }
                 for row in result.all()
             ]
 
         return await cache.get_or_set(cache_key, _fetch, ttl=settings.CACHE_DEFAULT_TTL) or []
 
-    async def attach_mcp_to_agent(
+    async def assign_mcp_to_agent(
         self, db: AsyncSession, cache: CacheService, org_id: str,
-        agent_id: str, mcp_server_id: str,
+        agent_id: str, mcp_server_id: str, env_overrides: dict | None = None,
     ) -> dict:
-        """Attach an MCP server to an agent."""
-        # Check not already attached
+        """Assign an MCP server to an agent."""
+        # Check not already assigned
         existing = await db.execute(
             select(CmsAgentMcpServer).where(
                 CmsAgentMcpServer.org_id == org_id,
@@ -72,13 +105,14 @@ class TenantAgentAccessService:
         if existing.scalar_one_or_none():
             raise CmsException(
                 error_code=ErrorCode.VALIDATION_ERROR,
-                detail="MCP server already attached to this agent",
+                detail="MCP server already assigned to this agent",
                 status_code=409,
             )
 
         link = CmsAgentMcpServer(
             org_id=org_id, agent_id=agent_id,
             mcp_server_id=mcp_server_id, is_active=True,
+            env_overrides=env_overrides,
             created_at=datetime.now(timezone.utc),
         )
         db.add(link)
@@ -89,14 +123,14 @@ class TenantAgentAccessService:
         inv = CacheInvalidation(cache)
         await inv.clear_agent_mcp_servers(agent_id, org_id)
 
-        logger.info(f"Attached MCP {mcp_server_id} to agent {agent_id} in org {org_id}")
+        logger.info(f"Assigned MCP {mcp_server_id} to agent {agent_id} in org {org_id}")
         return {"id": str(link.id), "agent_id": agent_id, "mcp_server_id": mcp_server_id, "is_active": True}
 
-    async def detach_mcp_from_agent(
+    async def revoke_mcp_from_agent(
         self, db: AsyncSession, cache: CacheService, org_id: str,
         agent_id: str, mcp_server_id: str,
     ) -> None:
-        """Detach an MCP server from an agent."""
+        """Revoke an MCP server from an agent."""
         result = await db.execute(
             select(CmsAgentMcpServer).where(
                 CmsAgentMcpServer.org_id == org_id,
@@ -115,7 +149,38 @@ class TenantAgentAccessService:
         inv = CacheInvalidation(cache)
         await inv.clear_agent_mcp_servers(agent_id, org_id)
 
-        logger.info(f"Detached MCP {mcp_server_id} from agent {agent_id} in org {org_id}")
+        logger.info(f"Revoked MCP {mcp_server_id} from agent {agent_id} in org {org_id}")
+
+    async def update_agent_mcp_env(
+        self, db: AsyncSession, cache: CacheService, org_id: str,
+        agent_id: str, mcp_server_id: str, env_overrides: dict,
+    ) -> dict:
+        """Update env_overrides for an agent-MCP link."""
+        result = await db.execute(
+            select(CmsAgentMcpServer).where(
+                CmsAgentMcpServer.org_id == org_id,
+                CmsAgentMcpServer.agent_id == agent_id,
+                CmsAgentMcpServer.mcp_server_id == mcp_server_id,
+            )
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            raise CmsException(error_code=ErrorCode.AGENT_NOT_FOUND, detail="MCP link not found", status_code=404)
+
+        link.env_overrides = env_overrides
+        await db.commit()
+        await db.refresh(link)
+
+        # Invalidate
+        inv = CacheInvalidation(cache)
+        await inv.clear_agent_mcp_servers(agent_id, org_id)
+
+        logger.info(f"Updated env_overrides for MCP {mcp_server_id} on agent {agent_id}")
+        return {
+            "id": str(link.id), "agent_id": agent_id,
+            "mcp_server_id": mcp_server_id, "env_overrides": link.env_overrides,
+            "is_active": link.is_active,
+        }
 
     # ── Group ↔ Agent ────────────────────────────────────────────────────
 
@@ -126,7 +191,6 @@ class TenantAgentAccessService:
         cache_key = CacheKeys.group_agents(group_id, org_id)
 
         async def _fetch():
-            from app.models.agent import CmsAgent
             result = await db.execute(
                 select(CmsGroupAgent, CmsAgent)
                 .join(CmsAgent, CmsGroupAgent.agent_id == CmsAgent.id)

@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, Response, Request, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 
-from app.core.dependencies import get_db_session, get_redis, get_current_user
+from app.core.dependencies import get_db_session, get_redis, get_current_user, get_cache_service
 from app.common.types import CurrentUser
 from app.services.auth import auth_svc
+from app.cache.invalidation import CacheService
 from app.schemas.auth import LoginRequest, MeResponse, ChangePasswordRequest
 from app.core.exceptions import CmsException
 from app.common.constants import ErrorCode
@@ -76,25 +77,22 @@ async def logout(
 
 @router.get("/me", response_model=MeResponse)
 async def me(
-    request: Request,
     db: AsyncSession = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Get current user info + org memberships."""
-    origin = get_request_origin(request)
-    return await auth_svc.get_me(db, current_user.user_id, origin)
+    return await auth_svc.get_me(db, current_user.user_id)
 
 
-@router.put("/avatar")
+@router.post("/avatar")
 async def upload_avatar(
-    request: Request,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db_session),
     current_user: CurrentUser = Depends(get_current_user),
+    cache: CacheService = Depends(get_cache_service),
 ):
     """Upload user avatar to S3. Returns public URL."""
-    origin = get_request_origin(request)
-    avatar_url = await auth_svc.update_avatar(db, current_user.user_id, file, origin)
+    avatar_url = await auth_svc.update_avatar(db, current_user.user_id, file, cache=cache)
     return {"avatar_url": avatar_url}
 
 

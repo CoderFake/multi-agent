@@ -66,7 +66,7 @@ const tenantNavItems: NavItem[] = [
 export function AppSidebar() {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const { isSuperuser, orgId } = useCurrentOrg();
+  const { isSuperuser, orgId, currentOrg } = useCurrentOrg();
   const { canView } = usePermissions();
 
   const isActive = (href: string) => pathname.startsWith(href);
@@ -80,13 +80,25 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/dashboard" className="flex items-center">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
-                  C
-                </div>
+              <Link href={currentOrg ? `${tenantPrefix}/dashboard` : "/dashboard"} className="flex items-center">
+                {currentOrg?.org_logo_url ? (
+                  <img
+                    src={currentOrg.org_logo_url}
+                    alt={currentOrg.org_name}
+                    className="flex aspect-square size-8 items-center justify-center rounded-lg object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold">
+                    {currentOrg ? currentOrg.org_name.charAt(0).toUpperCase() : "C"}
+                  </div>
+                )}
                 <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">CMS Admin</span>
-                  <span className="text-xs text-muted-foreground">v0.1.0</span>
+                  <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">
+                    {currentOrg ? currentOrg.org_name : "CMS Admin"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {currentOrg ? currentOrg.org_slug : "v0.1.0"}
+                  </span>
                 </div>
               </Link>
             </SidebarMenuButton>

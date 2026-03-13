@@ -21,6 +21,7 @@ class CmsAgent(Base):
     description = Column(Text, nullable=True)
     default_config = Column(JSONB, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_public = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     def __repr__(self) -> str:

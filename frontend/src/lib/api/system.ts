@@ -14,11 +14,15 @@ import type {
   SystemAgent,
   AgentCreateData,
   AgentUpdateData,
+  AgentOrgItem,
+  AgentToolItem,
   SystemProvider,
   ProviderUpdateData,
   SystemMcpServer,
   McpServerCreateData,
   McpServerUpdateData,
+  McpDiscoverResponse,
+  McpToolResponse,
   SystemSetting,
   SettingUpdateData,
 } from "@/types/models";
@@ -69,7 +73,7 @@ export function fetchOrgMembers(orgId: string) {
 export function uploadOrgLogo(orgId: string, file: File) {
   const formData = new FormData();
   formData.append("file", file);
-  return api.post(`/system/organizations/${orgId}/logo`, formData);
+  return api.postForm(`/system/organizations/${orgId}/logo`, formData);
 }
 
 // ============================================================================
@@ -122,6 +126,22 @@ export function deleteSystemAgent(id: string) {
   return api.delete(`/system/agents/${id}`);
 }
 
+export function setAgentPublic(id: string, is_public: boolean) {
+  return api.put<SystemAgent>(`/system/agents/${id}/set-public`, { is_public });
+}
+
+export function fetchAgentOrgs(id: string) {
+  return api.get<AgentOrgItem[]>(`/system/agents/${id}/orgs`);
+}
+
+export function setAgentOrgs(id: string, org_ids: string[]) {
+  return api.put<AgentOrgItem[]>(`/system/agents/${id}/orgs`, { org_ids });
+}
+
+export function fetchAgentTools(id: string) {
+  return api.get<AgentToolItem[]>(`/system/agents/${id}/tools`);
+}
+
 // ============================================================================
 // System Providers
 // ============================================================================
@@ -154,6 +174,31 @@ export function deleteSystemMcpServer(id: string) {
   return api.delete(`/system/mcp-servers/${id}`);
 }
 
+export function discoverMcpTools(mcpConfig: Record<string, unknown>) {
+  return api.post<McpDiscoverResponse[]>("/system/mcp-servers/discover-tools", {
+    mcp_config: mcpConfig,
+  });
+}
+
+export function syncMcpTools(serverId: string, mcpConfig: Record<string, unknown>) {
+  return api.post<McpDiscoverResponse[]>(`/system/mcp-servers/${serverId}/sync-tools`, {
+    mcp_config: mcpConfig,
+  });
+}
+
+export function fetchMcpServerTools(serverId: string) {
+  return api.get<McpToolResponse[]>(`/system/mcp-servers/${serverId}/tools`);
+}
+
+export function fetchMcpAssignedOrgs(serverId: string) {
+  return api.get<string[]>(`/system/mcp-servers/${serverId}/orgs`);
+}
+
+export function setMcpAssignedOrgs(serverId: string, orgIds: string[]) {
+  return api.put<string[]>(`/system/mcp-servers/${serverId}/orgs`, {
+    org_ids: orgIds,
+  });
+}
 // ============================================================================
 // System Settings
 // ============================================================================

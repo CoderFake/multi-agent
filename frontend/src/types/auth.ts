@@ -7,6 +7,7 @@ export interface OrgMembership {
   org_id: string;
   org_name: string;
   org_slug: string;
+  org_logo_url: string | null;
   org_role: string;
   is_active: boolean;
 }

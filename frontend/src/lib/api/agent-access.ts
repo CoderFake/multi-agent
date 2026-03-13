@@ -2,7 +2,13 @@
  * Tenant Agent Access Control API — agent-MCP, group-agent, group-tool.
  */
 import { api } from "@/lib/api-client";
-import type { Agent, AgentCreate, AgentUpdate, AgentMcpServer, GroupAgent, GroupToolAccess } from "@/types/models";
+import type { Agent, AgentCreate, AgentUpdate, AgentMcpServer, GroupAgent, GroupToolAccess, AvailableMcpServer } from "@/types/models";
+
+// ── Available MCP servers for the org ────────────────────────────────────
+
+export function fetchAvailableMcpServers() {
+    return api.get<AvailableMcpServer[]>("/tenant/access/available-mcp-servers");
+}
 
 // ── Agents CRUD ─────────────────────────────────────────────────────────
 
@@ -43,6 +49,12 @@ export function attachMcpToAgent(agentId: string, mcpServerId: string) {
 
 export function detachMcpFromAgent(agentId: string, mcpServerId: string) {
     return api.delete(`/tenant/access/agents/${agentId}/mcp-servers/${mcpServerId}`);
+}
+
+export function updateMcpEnv(agentId: string, mcpServerId: string, envOverrides: Record<string, string>) {
+    return api.patch(`/tenant/access/agents/${agentId}/mcp-servers/${mcpServerId}/env`, {
+        env_overrides: envOverrides,
+    });
 }
 
 // ── Agent is_public ─────────────────────────────────────────────────────

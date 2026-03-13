@@ -81,10 +81,21 @@ class CacheInvalidation:
         await self.cache.delete(CacheKeys.system_mcp_servers())
         logger.info("Invalidated system MCP servers cache")
 
+    async def clear_all_org_agents_cache(self) -> None:
+        """Invalidate ALL org agent caches (e.g. when toggling is_public off)."""
+        await self.cache.delete_pattern("org_agents:*")
+        logger.info("Invalidated all org agents cache (wildcard)")
+
+    async def clear_all_org_mcp_cache(self) -> None:
+        """Invalidate ALL org MCP-related caches (e.g. when MCP is_public toggled off)."""
+        await self.cache.delete_pattern("org_agents:*")
+        await self.cache.delete_pattern("agent_mcp:*")
+        await self.cache.delete_pattern("agent_mcp_ts:*")
+        logger.info("Invalidated all org MCP-related caches (wildcard)")
+
     async def clear_system_settings(self) -> None:
         """Invalidate all system settings cache."""
         await self.cache.delete(CacheKeys.system_settings())
-        # Also clear pattern for individual settings
         await self.cache.delete_pattern("sys:setting:*")
         logger.info("Invalidated system settings cache")
 
@@ -102,13 +113,36 @@ class CacheInvalidation:
         await self.cache.delete_pattern(pattern)
         logger.info(f"Invalidated all permissions for org: {org_id}")
 
+    async def clear_membership(self, user_id: str, org_id: str) -> None:
+        """Invalidate cached membership for a user in an org."""
+        key = CacheKeys.membership(user_id, org_id)
+        await self.cache.delete(key)
+        logger.info(f"Invalidated membership cache: {key}")
+
+    async def clear_org_memberships(self, org_id: str) -> None:
+        """Invalidate all cached memberships in an org."""
+        pattern = CacheKeys.membership_pattern(org_id=org_id)
+        await self.cache.delete_pattern(pattern)
+        logger.info(f"Invalidated all membership caches for org: {org_id}")
+
     # ── Agent Access Control ─────────────────────────────────────────────
 
     async def clear_agent_mcp_servers(self, agent_id: str, org_id: str) -> None:
-        """Invalidate agent's MCP server list + all user resolved access."""
+        """Invalidate agent's MCP server list + toolset + all user resolved access."""
         await self.cache.delete(CacheKeys.agent_mcp_servers(agent_id, org_id))
+        await self.cache.delete(CacheKeys.agent_mcp_toolset(agent_id, org_id))
         await self.cache.delete_pattern(CacheKeys.user_access_pattern(org_id))
-        logger.info(f"Invalidated agent MCP servers cache: agent={agent_id}, org={org_id}")
+        logger.info(f"Invalidated agent MCP servers + toolset cache: agent={agent_id}, org={org_id}")
+
+    async def clear_agent_mcp_toolset(self, agent_id: str, org_id: str) -> None:
+        """Invalidate agent's MCP toolset cache (runtime lookup)."""
+        await self.cache.delete(CacheKeys.agent_mcp_toolset(agent_id, org_id))
+        logger.info(f"Invalidated agent MCP toolset cache: agent={agent_id}, org={org_id}")
+
+    async def clear_all_agent_mcp_toolsets(self, org_id: str) -> None:
+        """Invalidate ALL agent MCP toolset caches in an org."""
+        await self.cache.delete_pattern(CacheKeys.agent_mcp_toolset_pattern(org_id))
+        logger.info(f"Invalidated all agent MCP toolset caches for org: {org_id}")
 
     async def clear_group_agents(self, group_id: str, org_id: str) -> None:
         """Invalidate group-agent access + all user resolved agent access."""
@@ -126,6 +160,7 @@ class CacheInvalidation:
         """Invalidate ALL access control caches for an org (nuclear option)."""
         await self.cache.delete_pattern(CacheKeys.group_access_pattern(org_id))
         await self.cache.delete_pattern(CacheKeys.agent_mcp_pattern(org_id))
+        await self.cache.delete_pattern(CacheKeys.agent_mcp_toolset_pattern(org_id))
         await self.cache.delete_pattern(CacheKeys.user_access_pattern(org_id))
         await self.clear_org_agents(org_id)
         logger.info(f"Invalidated all access control caches for org: {org_id}")

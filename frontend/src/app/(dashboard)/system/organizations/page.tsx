@@ -114,8 +114,9 @@ export default function OrganizationsPage() {
       mutate();
       // Redirect to detail page after create
       router.push(`/system/organizations/${org.id}`);
-    } catch {
-      toast.error("Error");
+    } catch (err: unknown) {
+      const detail = (err as { detail?: string })?.detail;
+      toast.error(detail || t("error"));
     } finally {
       setSaving(false);
     }

@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.common import CmsBaseSchema, StrUUID
+
 
 class OrgCreate(BaseModel):
     """POST /system/organizations."""
@@ -30,9 +32,9 @@ class OrgUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class OrgResponse(BaseModel):
+class OrgResponse(CmsBaseSchema):
     """Organization response."""
-    id: str
+    id: StrUUID
     name: str
     slug: str
     subdomain: Optional[str] = None
@@ -41,26 +43,20 @@ class OrgResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class OrgListResponse(OrgResponse):
     """Organization list response with member count."""
     member_count: int = 0
 
 
-class MembershipResponse(BaseModel):
+class MembershipResponse(CmsBaseSchema):
     """Org membership response."""
-    user_id: str
+    user_id: StrUUID
     user_email: str
     user_full_name: str
     org_role: str
     is_active: bool
     joined_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class AddMemberRequest(BaseModel):

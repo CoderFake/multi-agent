@@ -18,6 +18,8 @@ from app.models.organization import CmsOrgMembership, CmsOrganization
 from app.core.exceptions import CmsException
 from app.common.constants import ErrorCode
 from app.cache.keys import CacheKeys
+from app.cache.service import CacheService
+from app.cache.invalidation import CacheInvalidation
 from app.utils.storage import upload_file, delete_file, get_public_url, generate_path
 
 logger = get_logger(__name__)
@@ -131,7 +133,7 @@ class AuthService:
             except Exception:
                 pass
 
-    async def get_me(self, db: AsyncSession, user_id: str, request_origin: str | None = None) -> dict:
+    async def get_me(self, db: AsyncSession, user_id: str) -> dict:
         """Get current user info with org memberships."""
         result = await db.execute(
             select(CmsUser).where(CmsUser.id == user_id, CmsUser.deleted_at.is_(None))
@@ -156,6 +158,7 @@ class AuthService:
                 "org_id": str(membership.org_id),
                 "org_name": org.name,
                 "org_slug": org.slug,
+                "org_logo_url": get_public_url(org.logo_url, bucket=org.subdomain or org.slug),
                 "org_role": membership.org_role,
                 "is_active": membership.is_active,
             })
@@ -166,13 +169,13 @@ class AuthService:
             "full_name": user.full_name,
             "is_superuser": user.is_superuser,
             "is_active": user.is_active,
-            "avatar_url": get_public_url(user.avatar_url, request_origin, bucket=settings.BUCKET_SYSTEM),
+            "avatar_url": get_public_url(user.avatar_url, bucket=settings.BUCKET_SYSTEM),
             "memberships": memberships,
         }
 
     async def update_avatar(
         self, db: AsyncSession, user_id: str, file: UploadFile,
-        request_origin: str | None = None,
+        cache: CacheService | None = None,
     ) -> str:
         """Upload avatar to S3, delete old one, update DB."""
         # Validate
@@ -207,7 +210,11 @@ class AuthService:
         user.avatar_url = storage_path
         await db.commit()
 
-        return get_public_url(storage_path, request_origin, bucket=settings.BUCKET_SYSTEM)
+        if cache:
+            inv = CacheInvalidation(cache)
+            await inv.clear_user_info(user_id)
+
+        return get_public_url(storage_path, bucket=settings.BUCKET_SYSTEM)
 
     async def change_password(
         self, db: AsyncSession, user_id: str,

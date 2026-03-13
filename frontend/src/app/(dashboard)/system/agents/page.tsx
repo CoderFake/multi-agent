@@ -9,7 +9,6 @@ import type { SystemAgent, AgentCreateData } from "@/types/models";
 import {
   fetchSystemAgents,
   createSystemAgent,
-  updateSystemAgent,
   deleteSystemAgent,
 } from "@/lib/api/system";
 import { formatDateTime } from "@/lib/datetime";
@@ -18,6 +17,7 @@ import { DataTable } from "@/components/data-table/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ActionDropdown } from "@/components/shared/action-dropdown";
+import { AgentEditModal } from "@/components/agents/agent-edit-modal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,20 +29,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Plus } from "lucide-react";
+import { Plus, Globe } from "lucide-react";
 
 export default function SystemAgentsPage() {
   const t = useTranslations("common");
   const ts = useTranslations("system");
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingAgent, setEditingAgent] = useState<SystemAgent | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editAgent, setEditAgent] = useState<SystemAgent | null>(null);
   const [deleteAgent, setDeleteAgent] = useState<SystemAgent | null>(null);
   const [formData, setFormData] = useState<AgentCreateData>({
     codename: "",
     display_name: "",
     description: "",
-    is_active: true,
   });
   const [saving, setSaving] = useState(false);
 
@@ -78,6 +76,19 @@ export default function SystemAgentsPage() {
       ),
     },
     {
+      accessorKey: "is_public",
+      header: ts("isPublic"),
+      cell: ({ row }) =>
+        row.original.is_public ? (
+          <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+            <Globe className="h-3 w-3" />
+            Public
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Private</span>
+        ),
+    },
+    {
       accessorKey: "is_active",
       header: t("status"),
       cell: ({ row }) => <StatusBadge status={row.original.is_active} />,
@@ -92,57 +103,26 @@ export default function SystemAgentsPage() {
       header: "",
       cell: ({ row }) => (
         <ActionDropdown
-          onEdit={() => openEdit(row.original)}
+          onEdit={() => setEditAgent(row.original)}
           onDelete={() => setDeleteAgent(row.original)}
         />
       ),
     },
   ];
 
-  const openCreate = () => {
-    setEditingAgent(null);
-    setFormData({
-      codename: "",
-      display_name: "",
-      description: "",
-      is_active: true,
-    });
-    setDialogOpen(true);
-  };
-
-  const openEdit = (a: SystemAgent) => {
-    setEditingAgent(a);
-    setFormData({
-      codename: a.codename,
-      display_name: a.display_name,
-      description: a.description ?? "",
-      is_active: a.is_active,
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSave = useCallback(async () => {
+  const handleCreate = useCallback(async () => {
     setSaving(true);
     try {
-      if (editingAgent) {
-        await updateSystemAgent(editingAgent.id, {
-          display_name: formData.display_name,
-          description: formData.description,
-          is_active: formData.is_active,
-        });
-        toast.success(t("updateSuccess"));
-      } else {
-        await createSystemAgent(formData);
-        toast.success(t("createSuccess"));
-      }
-      setDialogOpen(false);
+      await createSystemAgent(formData);
+      toast.success(t("createSuccess"));
+      setCreateOpen(false);
       mutate();
     } catch {
       toast.error("Error");
     } finally {
       setSaving(false);
     }
-  }, [editingAgent, formData, mutate, t]);
+  }, [formData, mutate, t]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteAgent) return;
@@ -159,7 +139,7 @@ export default function SystemAgentsPage() {
   return (
     <div>
       <PageHeader title={ts("agentsTitle")} description={ts("agentsDesc")}>
-        <Button onClick={openCreate} className="gap-2">
+        <Button onClick={() => setCreateOpen(true)} className="gap-2">
           <Plus className="h-4 w-4" />
           {ts("createAgent")}
         </Button>
@@ -175,11 +155,12 @@ export default function SystemAgentsPage() {
         isLoading={isLoading}
       />
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* Create dialog — simple form */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingAgent ? t("edit") : t("create")} {ts("agent")}
+              {t("create")} {ts("agent")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -190,7 +171,6 @@ export default function SystemAgentsPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, codename: e.target.value })
                 }
-                disabled={!!editingAgent}
               />
             </div>
             <div className="space-y-2">
@@ -212,26 +192,25 @@ export default function SystemAgentsPage() {
                 rows={3}
               />
             </div>
-            <div className="flex items-center gap-3">
-              <Switch
-                checked={formData.is_active}
-                onCheckedChange={(v) =>
-                  setFormData({ ...formData, is_active: v })
-                }
-              />
-              <Label>{t("active")}</Label>
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
               {t("cancel")}
             </Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleCreate} disabled={saving}>
               {saving ? t("processing") : t("save")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit modal — wide with org assignment + tools */}
+      <AgentEditModal
+        agent={editAgent}
+        open={!!editAgent}
+        onOpenChange={(open) => !open && setEditAgent(null)}
+        onSaved={() => mutate()}
+      />
 
       <ConfirmDialog
         open={!!deleteAgent}
