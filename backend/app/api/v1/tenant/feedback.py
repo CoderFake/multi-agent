@@ -12,6 +12,7 @@ from app.core.dependencies import get_db_session, get_current_user, require_supe
 from app.common.types import CurrentUser
 from app.schemas.feedback import FeedbackStatusUpdate
 from app.services.feedback import feedback_svc
+from app.services.audit import audit_svc
 from app.utils.request_utils import get_request_origin
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
@@ -29,6 +30,10 @@ async def submit_feedback(
     """Submit platform feedback with optional image attachments (any authenticated user)."""
     feedback = await feedback_svc.create(
         db, user.user_id, None, category, message, images or None,
+    )
+    await audit_svc.log_action(
+        db, user.user_id, "submit", "feedback", str(feedback.id),
+        new_values={"category": category},
     )
     return {
         "id": str(feedback.id),
@@ -63,4 +68,8 @@ async def update_feedback_status(
 ):
     """Update feedback status (superuser/admin only)."""
     fb = await feedback_svc.update_status(db, feedback_id, data.status)
+    await audit_svc.log_action(
+        db, user.user_id, "update_status", "feedback", feedback_id,
+        new_values={"status": data.status},
+    )
     return {"id": str(fb.id), "status": fb.status}

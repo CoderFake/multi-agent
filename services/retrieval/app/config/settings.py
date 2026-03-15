@@ -5,8 +5,6 @@ from here instead of calling os.getenv directly.
 
 Usage:
     from app.config.settings import settings
-
-    uri = settings.milvus_uri
 """
 
 import os
@@ -16,15 +14,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()  # fallback: CWD / Docker-injected env
+load_dotenv()
 
-# Also load from project root .env if running on host (outside Docker)
-# Project root is 4 levels up: retrieval/app/config/ -> retrieval/ -> services/ -> project root
 _project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 _root_env = _project_root / ".env"
 if _root_env.exists():
     load_dotenv(_root_env, override=False)
-
 
 
 def _env(key: str, default: str | None = None) -> str:
@@ -39,6 +34,11 @@ class Settings:
     # ── Milvus ────────────────────────────────────────────────────────
     MILVUS_HOST: str = field(default_factory=lambda: _env("MILVUS_HOST", "milvus"))
     MILVUS_PORT: int = field(default_factory=lambda: int(_env("MILVUS_PORT", "19530")))
+
+    # ── Redis ─────────────────────────────────────────────────────────
+    REDIS_URL: str = field(default_factory=lambda: _env("REDIS_URL", "redis://localhost:6380/0"))
+    TASK_TTL: int = field(default_factory=lambda: int(_env("TASK_TTL", "86400")))  # 24h
+    LOCK_TTL: int = field(default_factory=lambda: int(_env("LOCK_TTL", "3600")))   # 1h
 
     # ── RabbitMQ ──────────────────────────────────────────────────────
     RABBITMQ_URL: str = field(
@@ -61,6 +61,26 @@ class Settings:
     # ── Search ────────────────────────────────────────────────────────
     DEFAULT_TOP_K: int = field(default_factory=lambda: int(_env("DEFAULT_TOP_K", "10")))
 
+    # ── MinIO ─────────────────────────────────────────────────────────
+    MINIO_ENDPOINT: str = field(default_factory=lambda: _env("MINIO_ENDPOINT", "localhost:9000"))
+    MINIO_ACCESS_KEY: str = field(default_factory=lambda: _env("MINIO_ACCESS_KEY", "minioadmin"))
+    MINIO_SECRET_KEY: str = field(default_factory=lambda: _env("MINIO_SECRET_KEY", "minioadmin"))
+    MINIO_BUCKET: str = field(default_factory=lambda: _env("MINIO_BUCKET", "nws"))
+    MINIO_SECURE: bool = field(default_factory=lambda: _env("MINIO_SECURE", "false").lower() == "true")
+
+    # ── Chunking ──────────────────────────────────────────────────────
+    CHUNK_SIZE: int = field(default_factory=lambda: int(_env("CHUNK_SIZE", "512")))
+    CHUNK_OVERLAP: int = field(default_factory=lambda: int(_env("CHUNK_OVERLAP", "50")))
+
+    # ── Extraction ────────────────────────────────────────────────────
+    OCR_DEVICE: str = field(default_factory=lambda: _env("OCR_DEVICE", "cpu"))
+    MIN_BLOCK_DENSITY: float = field(default_factory=lambda: float(_env("MIN_BLOCK_DENSITY", "3.0")))
+    TEMP_DIR: str = field(default_factory=lambda: _env("TEMP_DIR", "/tmp/retrieval"))
+
+    # ── Milvus Index ──────────────────────────────────────────────────
+    MILVUS_NLIST: int = field(default_factory=lambda: int(_env("MILVUS_NLIST", "128")))
+    MILVUS_NPROBE: int = field(default_factory=lambda: int(_env("MILVUS_NPROBE", "10")))
+
     @property
     def milvus_uri(self) -> str:
         """Full Milvus connection URI."""
@@ -73,4 +93,3 @@ def _get_settings() -> Settings:
 
 
 settings: Settings = _get_settings()
-

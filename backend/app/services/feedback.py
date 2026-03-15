@@ -146,6 +146,22 @@ class FeedbackService:
         feedback.status = status
         await db.commit()
         await db.refresh(feedback)
+
+        if status == FeedbackStatus.RESOLVED:
+            from app.services.notification import notification_svc
+            await notification_svc.create(
+                db,
+                user_id=str(feedback.user_id),
+                org_id=str(feedback.org_id) if feedback.org_id else None,
+                type=NotificationType.FEEDBACK_RESOLVED,
+                title_code=NotificationCode.FEEDBACK_RESOLVED,
+                message_code=NotificationCode.FEEDBACK_RESOLVED_DESC,
+                data={
+                    "feedback_id": str(feedback.id),
+                    "category": feedback.category,
+                },
+            )
+
         return feedback
 
 

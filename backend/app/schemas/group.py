@@ -42,5 +42,5 @@ class PermissionAssign(BaseModel):
 
 
 class GroupMemberAction(BaseModel):
-    """Add/remove a user from a group."""
-    user_id: str
+    """Add multiple users to a group."""
+    user_ids: list[str] = Field(..., min_length=1)

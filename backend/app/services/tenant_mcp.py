@@ -2,12 +2,14 @@
 Tenant MCP service — custom MCP server + tool CRUD within an org.
 Uses CacheInvalidation on mutation.
 """
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import CmsException
 from app.common.constants import ErrorCode
 from app.cache.service import CacheService
+from app.cache.keys import CacheKeys
+from app.config.settings import settings
 from app.models.mcp import CmsMcpServer, CmsTool
 from app.utils.logging import get_logger
 
@@ -35,7 +37,32 @@ class TenantMcpService:
             ]
 
         return await cache.get_or_set(
-            f"org_mcp:{org_id}", _fetch, ttl=settings.CACHE_DEFAULT_TTL,
+            CacheKeys.org_mcp(org_id), _fetch, ttl=settings.CACHE_DEFAULT_TTL,
+        ) or []
+
+    async def list_available(self, db: AsyncSession, cache: CacheService, org_id: str) -> list[dict]:
+        """List all available MCP servers: system (org_id IS NULL) + custom org servers. Cached."""
+
+        async def _fetch():
+            result = await db.execute(
+                select(CmsMcpServer).where(
+                    or_(CmsMcpServer.org_id.is_(None), CmsMcpServer.org_id == org_id)
+                )
+            )
+            return [
+                {
+                    "id": str(s.id), "codename": s.codename,
+                    "display_name": s.display_name,
+                    "transport": s.transport,
+                    "requires_env_vars": s.requires_env_vars,
+                    "is_system": s.org_id is None,
+                    "is_active": s.is_active,
+                }
+                for s in result.scalars().all()
+            ]
+
+        return await cache.get_or_set(
+            CacheKeys.org_mcp_available(org_id), _fetch, ttl=settings.CACHE_DEFAULT_TTL,
         ) or []
 
     async def create_server(
@@ -60,7 +87,8 @@ class TenantMcpService:
         logger.info(f"MCP server created: {server.codename} in org {org_id}")
 
         # Invalidate mcp list cache
-        await cache.delete(f"org_mcp:{org_id}")
+        await cache.delete(CacheKeys.org_mcp(org_id))
+        await cache.delete(CacheKeys.org_mcp_available(org_id))
 
         return {
             "id": str(server.id), "codename": server.codename,
@@ -83,7 +111,8 @@ class TenantMcpService:
         await db.refresh(server)
 
         # Invalidate mcp list cache
-        await cache.delete(f"org_mcp:{org_id}")
+        await cache.delete(CacheKeys.org_mcp(org_id))
+        await cache.delete(CacheKeys.org_mcp_available(org_id))
 
         return {
             "id": str(server.id), "codename": server.codename,
@@ -102,16 +131,26 @@ class TenantMcpService:
         await db.commit()
 
         # Invalidate mcp list cache
-        await cache.delete(f"org_mcp:{org_id}")
+        await cache.delete(CacheKeys.org_mcp(org_id))
+        await cache.delete(CacheKeys.org_mcp_available(org_id))
 
         logger.info(f"MCP server deleted: {server.codename} in org {org_id}")
 
     # ── Tool CRUD ────────────────────────────────────────────────────────
 
     async def list_tools(self, db: AsyncSession, org_id: str, server_id: str) -> list[dict]:
-        """List tools for a MCP server."""
-        await self._get_server(db, org_id, server_id)
+        """List tools for a MCP server (system or custom in this org)."""
         result = await db.execute(
+            select(CmsMcpServer).where(
+                CmsMcpServer.id == server_id,
+                or_(CmsMcpServer.org_id.is_(None), CmsMcpServer.org_id == org_id),
+            )
+        )
+        server = result.scalar_one_or_none()
+        if not server:
+            raise CmsException(error_code=ErrorCode.MCP_NOT_FOUND, detail="MCP server not found", status_code=404)
+
+        tools_result = await db.execute(
             select(CmsTool).where(CmsTool.mcp_server_id == server_id)
         )
         return [
@@ -120,7 +159,7 @@ class TenantMcpService:
                 "display_name": t.display_name, "description": t.description,
                 "input_schema": t.input_schema, "is_active": t.is_active,
             }
-            for t in result.scalars().all()
+            for t in tools_result.scalars().all()
         ]
 
     async def create_tool(

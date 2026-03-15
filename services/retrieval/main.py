@@ -2,10 +2,9 @@
 
 This is the app entry point. It:
 1. Creates the FastAPI app with OpenAPI metadata
-2. Manages Milvus connection and RabbitMQ consumer lifecycle
-3. Registers all route modules
-
-All business logic lives in app/services/. All route handlers live in app/routes/.
+2. Manages Milvus + Redis connection lifecycle
+3. Starts Redis indexing consumer + RabbitMQ RAG consumer
+4. Registers all route modules
 
 Usage:
     uvicorn main:app --host 0.0.0.0 --port 8001
@@ -16,7 +15,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.core.milvus import close_milvus, get_milvus_client
+from app.core.milvus import connect_milvus, disconnect_milvus
+from app.worker import start_indexing_consumer, start_rabbitmq_consumer
+from app.core.redis import close_redis, get_redis
 from app.routes import register_routes
 
 logging.basicConfig(
@@ -31,24 +32,31 @@ async def lifespan(_app: FastAPI):
     """Startup/shutdown lifecycle."""
     # Startup: verify Milvus connection
     try:
-        get_milvus_client()
+        connect_milvus()
         logger.info("Milvus connection verified")
     except Exception as e:
-        logger.error(f"Failed to connect to Milvus: {e}")
+        logger.error("Failed to connect to Milvus: %s", e)
 
-    # Start RabbitMQ consumers in background
+    # Startup: verify Redis connection
     try:
-        from app.worker import start_consumers
-
-        start_consumers()
-        logger.info("RabbitMQ consumers started")
+        get_redis()
+        logger.info("Redis connection verified")
     except Exception as e:
-        logger.warning(f"RabbitMQ consumers not started: {e}")
+        logger.error("Failed to connect to Redis: %s", e)
+
+    try:
+        start_indexing_consumer()
+        logger.info("Redis indexing consumer started")
+
+        start_rabbitmq_consumer()
+        logger.info("RabbitMQ RAG consumer started")
+    except Exception as e:
+        logger.warning("Consumers not started: %s", e)
 
     yield
 
-    # Shutdown
-    close_milvus()
+    disconnect_milvus()
+    close_redis()
     logger.info("Retrieval service shut down")
 
 
@@ -57,9 +65,9 @@ app = FastAPI(
     description=(
         "Vector search and document indexing service backed by Milvus. "
         "Provides semantic search, document ingestion, and file listing APIs. "
-        "Communicates with sagent via RabbitMQ queues."
+        "Communicates via Redis queue for indexing and RabbitMQ for RAG requests."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -68,3 +76,12 @@ app = FastAPI(
 
 register_routes(app)
 
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=True,
+    )

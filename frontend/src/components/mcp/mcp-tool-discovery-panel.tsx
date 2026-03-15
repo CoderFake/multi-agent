@@ -13,8 +13,8 @@ interface McpToolDiscoveryPanelProps {
   discovering: boolean;
   syncing: boolean;
   showSyncButton: boolean;
-  onDiscover: () => void;
-  onSync: () => void;
+  onDiscover?: () => void;
+  onSync?: () => void;
 }
 
 export function McpToolDiscoveryPanel({
@@ -48,20 +48,22 @@ export function McpToolDiscoveryPanel({
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onDiscover}
-              disabled={discovering || syncing}
-              className="gap-1.5"
-            >
-              {discovering ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              {discovering ? ts("discovering") : ts("discoverTools")}
-            </Button>
+            {onDiscover && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onDiscover}
+                disabled={discovering || syncing}
+                className="gap-1.5"
+              >
+                {discovering ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                {discovering ? ts("discovering") : ts("discoverTools")}
+              </Button>
+            )}
             {showSyncButton && totalTools > 0 && (
               <Button
                 size="sm"

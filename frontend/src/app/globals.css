@@ -3,6 +3,13 @@
 /* Custom variant for setting dark mode programmatically (required for next-themes + Tailwind v4) */
 @custom-variant dark (&:is(.dark, .dark *));
 
+/* Override Tailwind v4 default: border uses --border variable instead of currentColor */
+*,
+::after,
+::before {
+  border-color: var(--border);
+}
+
 :root {
   /* Font families */
   --font-serif: var(--font-space-grotesk);

@@ -22,7 +22,7 @@ import { McpOrgAssignModal } from "@/components/mcp/mcp-org-assign-modal";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Info } from "lucide-react";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 const DEFAULT_MCP_JSON = JSON.stringify(
@@ -52,6 +52,7 @@ export default function SystemMcpServersPage() {
   // ── Selected server ─────────────────────────────────────────────────
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = servers?.find((s) => s.id === selectedId) ?? null;
+  const isNative = selected?.transport === "native";
 
   // ── JSON editor state ───────────────────────────────────────────────
   const [mcpJson, setMcpJson] = useState(DEFAULT_MCP_JSON);
@@ -230,7 +231,7 @@ export default function SystemMcpServersPage() {
       {/* Header */}
       <PageHeader title={ts("mcpTitle")} description={ts("mcpDesc")}>
         <div className="flex items-center gap-2">
-          {selected && (
+          {selected && !isNative && (
             <Button
               variant="destructive"
               size="sm"
@@ -253,12 +254,22 @@ export default function SystemMcpServersPage() {
         servers={servers ?? []}
         selectedId={selectedId}
         onSelect={handleSelectServer}
-        onSaveConfig={handleSaveConfig}
-        onAssignOrgs={() => setOrgModalOpen(true)}
+        onSaveConfig={isNative ? undefined : handleSaveConfig}
+        onAssignOrgs={isNative ? undefined : () => setOrgModalOpen(true)}
       />
 
+      {/* Native warning */}
+      {selected && isNative && (
+        <div className="flex items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
+          <Info className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-sm text-amber-700 dark:text-amber-400">
+            {ts("mcpNativeWarning")}
+          </span>
+        </div>
+      )}
+
       {/* is_public toggle */}
-      {selected && (
+      {selected && !isNative && (
         <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card px-4 py-3">
           <Switch
             id="mcp-public-toggle"
@@ -280,10 +291,10 @@ export default function SystemMcpServersPage() {
         <div className="min-w-0">
           <McpJsonEditor
             value={mcpJson}
-            onChange={setMcpJson}
-            disabled={discovering || syncing}
-            requiresEnvVars={selected ? requiresEnvVars : undefined}
-            onToggleEnvVars={selected ? () => setRequiresEnvVars(!requiresEnvVars) : undefined}
+            onChange={isNative ? () => { } : setMcpJson}
+            disabled={isNative || discovering || syncing}
+            requiresEnvVars={selected && !isNative ? requiresEnvVars : undefined}
+            onToggleEnvVars={selected && !isNative ? () => setRequiresEnvVars(!requiresEnvVars) : undefined}
           />
         </div>
         {/* Right: Discovered Tools */}
@@ -292,9 +303,9 @@ export default function SystemMcpServersPage() {
             results={discoveredResults}
             discovering={discovering}
             syncing={syncing}
-            showSyncButton={!!selected}
-            onDiscover={handleDiscover}
-            onSync={handleSync}
+            showSyncButton={!!selected && !isNative}
+            onDiscover={isNative ? undefined : handleDiscover}
+            onSync={isNative ? undefined : handleSync}
           />
         </div>
       </div>

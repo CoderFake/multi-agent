@@ -18,6 +18,7 @@ import type {
   AgentToolItem,
   SystemProvider,
   ProviderUpdateData,
+  AgentModel,
   SystemMcpServer,
   McpServerCreateData,
   McpServerUpdateData,
@@ -25,6 +26,7 @@ import type {
   McpToolResponse,
   SystemSetting,
   SettingUpdateData,
+  Invite,
 } from "@/types/models";
 
 // ============================================================================
@@ -79,16 +81,6 @@ export function uploadOrgLogo(orgId: string, file: File) {
 // ============================================================================
 // Invites
 // ============================================================================
-
-export interface Invite {
-  id: string;
-  email: string;
-  org_id: string;
-  org_role: string;
-  status: "pending" | "accepted" | "expired" | "revoked";
-  expires_at: string;
-  created_at: string;
-}
 
 export function createInvite(data: { email: string; org_id: string; org_role: string }) {
   return api.post<Invite>("/invites", data);
@@ -152,6 +144,35 @@ export function fetchSystemProviders() {
 
 export function updateSystemProvider(id: string, data: ProviderUpdateData) {
   return api.put<SystemProvider>(`/system/providers/${id}`, data);
+}
+
+// ── Provider Models ───────────────────────────────────────────────────
+
+export function fetchSystemModels(providerId: string) {
+  return api.get<AgentModel[]>(`/system/providers/${providerId}/models`);
+}
+
+export function createSystemModel(providerId: string, data: {
+  name: string;
+  model_type?: string;
+  context_window?: number | null;
+  pricing_per_1m_tokens?: number | null;
+}) {
+  return api.post<AgentModel>(`/system/providers/${providerId}/models`, data);
+}
+
+export function updateSystemModel(providerId: string, modelId: string, data: {
+  name?: string;
+  model_type?: string;
+  context_window?: number | null;
+  pricing_per_1m_tokens?: number | null;
+  is_active?: boolean;
+}) {
+  return api.put<AgentModel>(`/system/providers/${providerId}/models/${modelId}`, data);
+}
+
+export function deleteSystemModel(providerId: string, modelId: string) {
+  return api.delete(`/system/providers/${providerId}/models/${modelId}`);
 }
 
 // ============================================================================

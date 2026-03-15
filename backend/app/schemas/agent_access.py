@@ -49,7 +49,7 @@ class GroupAgentResponse(CmsBaseSchema):
 # ── Group ↔ Tool Access ─────────────────────────────────────────────────
 
 class GroupToolToggle(BaseModel):
-    """Toggle tool access for a group."""
+    """Toggle tool access for a group+agent."""
     tool_id: str
     is_enabled: bool
 
@@ -62,6 +62,7 @@ class GroupToolBulkToggle(BaseModel):
 class GroupToolAccessResponse(CmsBaseSchema):
     id: StrUUID
     group_id: StrUUID
+    agent_id: StrUUID
     tool_id: StrUUID
     tool_codename: str | None = None
     tool_name: str | None = None

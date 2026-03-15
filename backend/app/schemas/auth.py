@@ -32,6 +32,7 @@ class OrgMembershipResponse(CmsBaseSchema):
     org_logo_url: str | None = None
     org_role: str
     is_active: bool
+    timezone: str = "UTC"
 
 
 class TokenPayload(BaseModel):

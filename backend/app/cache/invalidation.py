@@ -40,11 +40,26 @@ class CacheInvalidation:
         await self.cache.delete(key)
         logger.info(f"Invalidated org agents cache: {key}")
 
-    async def clear_provider_keys(self, org_id: str, provider_id: str) -> None:
-        """Invalidate cached provider keys for an org."""
-        key = CacheKeys.provider_keys(org_id, provider_id)
+    async def clear_org_folders(self, org_id: str) -> None:
+        """Invalidate cached folder lists for an org (global + all per-user)."""
+        key = CacheKeys.org_folders(org_id)
         await self.cache.delete(key)
-        logger.info(f"Invalidated provider keys cache: {key}")
+        await self.cache.delete_pattern(CacheKeys.user_folders_pattern(org_id))
+        logger.info(f"Invalidated org folders cache: {key} + user_folders:*:{org_id}")
+
+    async def clear_provider_keys(self, org_id: str, provider_id: str) -> None:
+        """Invalidate cached provider keys + providers-with-keys for an org."""
+        key = CacheKeys.provider_keys(org_id, provider_id)
+        pwk_key = CacheKeys.org_providers_with_keys(org_id)
+        await self.cache.delete(key)
+        await self.cache.delete(pwk_key)
+        logger.info(f"Invalidated provider keys cache: {key}, {pwk_key}")
+
+    async def clear_org_providers_with_keys(self, org_id: str) -> None:
+        """Invalidate cached providers-with-keys for an org."""
+        key = CacheKeys.org_providers_with_keys(org_id)
+        await self.cache.delete(key)
+        logger.info(f"Invalidated org providers-with-keys cache: {key}")
 
     async def clear_user_info(self, user_id: str) -> None:
         """Invalidate cached user info."""
@@ -91,6 +106,7 @@ class CacheInvalidation:
         await self.cache.delete_pattern("org_agents:*")
         await self.cache.delete_pattern("agent_mcp:*")
         await self.cache.delete_pattern("agent_mcp_ts:*")
+        await self.cache.delete_pattern("org_mcp_avail:*")
         logger.info("Invalidated all org MCP-related caches (wildcard)")
 
     async def clear_system_settings(self) -> None:
@@ -150,11 +166,16 @@ class CacheInvalidation:
         await self.cache.delete_pattern(CacheKeys.user_access_pattern(org_id))
         logger.info(f"Invalidated group agents cache: group={group_id}, org={org_id}")
 
-    async def clear_group_tools(self, group_id: str, org_id: str) -> None:
+    async def clear_group_tools(self, group_id: str, agent_id: str, org_id: str) -> None:
         """Invalidate group-tool access + all user resolved tool access."""
-        await self.cache.delete(CacheKeys.group_tools(group_id, org_id))
+        await self.cache.delete(CacheKeys.group_tools(group_id, agent_id, org_id))
         await self.cache.delete_pattern(CacheKeys.user_access_pattern(org_id))
-        logger.info(f"Invalidated group tools cache: group={group_id}, org={org_id}")
+        logger.info(f"Invalidated group tools cache: group={group_id}, agent={agent_id}, org={org_id}")
+
+    async def clear_agent_tools_all(self) -> None:
+        """Invalidate ALL agent_tools caches (called when MCP tools are synced/created)."""
+        await self.cache.delete_pattern("agent_tools:*")
+        logger.info("Invalidated all agent_tools caches")
 
     async def clear_all_access_control(self, org_id: str) -> None:
         """Invalidate ALL access control caches for an org (nuclear option)."""

@@ -134,8 +134,8 @@ export function FeedbackDialog() {
                         {previews.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                                 {previews.map((src, i) => (
-                                    <div key={i} className="relative h-16 w-16 rounded-md overflow-hidden border">
-                                        <img src={src} alt="" className="h-full w-full object-cover" />
+                                    <div key={i} className="relative h-16 w-16 rounded-md border border-border/50">
+                                        <img src={src} alt="" className="h-full w-full rounded-md object-cover" />
                                         <button
                                             type="button"
                                             onClick={() => handleRemoveImage(i)}

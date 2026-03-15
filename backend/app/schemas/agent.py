@@ -15,6 +15,8 @@ class AgentCreate(BaseModel):
     display_name: str
     description: Optional[str] = None
     default_config: Optional[dict[str, Any]] = None
+    provider_id: Optional[str] = None
+    model_id: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -24,6 +26,8 @@ class AgentUpdate(BaseModel):
     default_config: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
     is_public: Optional[bool] = None
+    provider_id: Optional[str] = None
+    model_id: Optional[str] = None
 
 
 class AgentResponse(CmsBaseSchema):
@@ -62,3 +66,8 @@ class AgentToolResponse(CmsBaseSchema):
 
 class SetPublicBody(BaseModel):
     is_public: bool
+
+
+class SetAgentProviderBody(BaseModel):
+    provider_id: str
+    model_id: str

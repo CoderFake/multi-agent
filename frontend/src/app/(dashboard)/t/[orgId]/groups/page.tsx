@@ -16,6 +16,7 @@ import {
 import { useCurrentOrg } from "@/contexts/org-context";
 import { usePermissions } from "@/hooks/use-permissions";
 import { PageHeader } from "@/components/shared/page-header";
+import { PermissionGate } from "@/components/shared/permission-gate";
 import { DataTable } from "@/components/data-table/data-table";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ActionDropdown } from "@/components/shared/action-dropdown";
@@ -163,77 +164,79 @@ export default function TenantGroupsPage() {
     }, [deleteGroup, mutate, t]);
 
     return (
-        <div>
-            <PageHeader title={tg("groupsTitle")} description={tg("groupsDesc")}>
-                {hasPermission("group.create") && (
-                    <Button onClick={openCreate} className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        {tg("createGroup")}
-                    </Button>
-                )}
-            </PageHeader>
-
-            <DataTable
-                columns={columns}
-                data={data?.items ?? []}
-                total={data?.total ?? 0}
-                page={1}
-                pageSize={100}
-                onPageChange={() => { }}
-                isLoading={isLoading}
-            />
-
-            {/* Create/Edit Dialog */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>
-                            {editGroup ? tg("editGroup") : tg("createGroup")}
-                        </DialogTitle>
-                        <DialogDescription>
-                            {editGroup ? tg("editGroupDesc") : tg("createGroupDesc")}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label>{t("name")}</Label>
-                            <Input
-                                value={formData.name}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, name: e.target.value })
-                                }
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>{t("description")}</Label>
-                            <Textarea
-                                value={formData.description || ""}
-                                onChange={(e) =>
-                                    setFormData({ ...formData, description: e.target.value })
-                                }
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                            {t("cancel")}
+        <PermissionGate permission="group.view" pageLevel>
+            <div>
+                <PageHeader title={tg("groupsTitle")} description={tg("groupsDesc")}>
+                    {hasPermission("group.create") && (
+                        <Button onClick={openCreate} className="gap-2">
+                            <Plus className="h-4 w-4" />
+                            {tg("createGroup")}
                         </Button>
-                        <Button onClick={handleSave} disabled={saving || !formData.name}>
-                            {saving ? t("processing") : t("save")}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    )}
+                </PageHeader>
 
-            {/* Delete Confirmation */}
-            <ConfirmDialog
-                open={!!deleteGroup}
-                onOpenChange={(open) => !open && setDeleteGroup(null)}
-                title={t("deleteConfirmTitle")}
-                description={t("deleteConfirmDesc")}
-                onConfirm={handleDelete}
-            />
-        </div>
+                <DataTable
+                    columns={columns}
+                    data={data?.items ?? []}
+                    total={data?.total ?? 0}
+                    page={1}
+                    pageSize={100}
+                    onPageChange={() => { }}
+                    isLoading={isLoading}
+                />
+
+                {/* Create/Edit Dialog */}
+                <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>
+                                {editGroup ? tg("editGroup") : tg("createGroup")}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {editGroup ? tg("editGroupDesc") : tg("createGroupDesc")}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label>{t("name")}</Label>
+                                <Input
+                                    value={formData.name}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, name: e.target.value })
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>{t("description")}</Label>
+                                <Textarea
+                                    value={formData.description || ""}
+                                    onChange={(e) =>
+                                        setFormData({ ...formData, description: e.target.value })
+                                    }
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                                {t("cancel")}
+                            </Button>
+                            <Button onClick={handleSave} disabled={saving || !formData.name}>
+                                {saving ? t("processing") : t("save")}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Delete Confirmation */}
+                <ConfirmDialog
+                    open={!!deleteGroup}
+                    onOpenChange={(open) => !open && setDeleteGroup(null)}
+                    title={t("deleteConfirmTitle")}
+                    description={t("deleteConfirmDesc")}
+                    onConfirm={handleDelete}
+                />
+            </div>
+        </PermissionGate>
     );
 }

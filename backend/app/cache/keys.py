@@ -66,6 +66,36 @@ class CacheKeys:
         """Cache key for org's enabled agents list."""
         return f"org_agents:{org_id}"
 
+    @staticmethod
+    def org_providers_with_keys(org_id: str) -> str:
+        """Cache key for providers that have ≥ 1 active key in this org."""
+        return f"org_providers_with_keys:{org_id}"
+
+    @staticmethod
+    def org_folders(org_id: str) -> str:
+        """Cache key for org's folder list (knowledge base)."""
+        return f"org_folders:{org_id}"
+
+    @staticmethod
+    def org_mcp(org_id: str) -> str:
+        """Cache key for org's custom MCP servers list."""
+        return f"org_mcp:{org_id}"
+
+    @staticmethod
+    def org_mcp_available(org_id: str) -> str:
+        """Cache key for available MCP servers (system + custom) visible to an org."""
+        return f"org_mcp_avail:{org_id}"
+
+    @staticmethod
+    def user_folders(user_id: str, org_id: str) -> str:
+        """Cache key for a user's visible folder list (filtered by access)."""
+        return f"user_folders:{user_id}:{org_id}"
+
+    @staticmethod
+    def user_folders_pattern(org_id: str) -> str:
+        """Pattern to invalidate ALL user folder caches in an org."""
+        return f"user_folders:*:{org_id}"
+
     # ── System Resources (rarely change → long TTL) ──────────────────────
 
     @staticmethod
@@ -125,9 +155,14 @@ class CacheKeys:
         return f"group_agents:{group_id}:{org_id}"
 
     @staticmethod
-    def group_tools(group_id: str, org_id: str) -> str:
-        """Cache key for tool access settings for a group."""
-        return f"group_tools:{group_id}:{org_id}"
+    def group_tools(group_id: str, agent_id: str, org_id: str) -> str:
+        """Cache key for tool access settings for a group+agent."""
+        return f"group_tools:{group_id}:{agent_id}:{org_id}"
+
+    @staticmethod
+    def agent_tools_for_org(agent_id: str, org_id: str) -> str:
+        """Cache key for tools available for an agent in an org."""
+        return f"agent_tools:{agent_id}:{org_id}"
 
     @staticmethod
     def user_accessible_agents(user_id: str, org_id: str) -> str:
@@ -138,6 +173,22 @@ class CacheKeys:
     def user_accessible_tools(user_id: str, org_id: str) -> str:
         """Cache key for resolved list of tools a user can access."""
         return f"user_tools:{user_id}:{org_id}"
+    
+    @staticmethod
+    def index_queue() -> str:
+        """Redis key for indexing task queue (LPUSH/BRPOP)."""
+        return "idx:queue"
+
+    @staticmethod
+    def index_task(job_id: str) -> str:
+        """Redis key for indexing task progress."""
+        return f"idx:task:{job_id}"
+
+    @staticmethod
+    def index_lock(org_id: str, file_hash: str) -> str:
+        """Redis key for dedup lock (prevent duplicate file processing)."""
+        return f"idx:lock:{org_id}:{file_hash}"
+
     # ── Rate Limiting ────────────────────────────────────────────────────
 
     @staticmethod

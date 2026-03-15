@@ -277,10 +277,10 @@ class TenantAgentAccessService:
     # ── Group ↔ Tool Access ─────────────────────────────────────────────
 
     async def list_group_tool_access(
-        self, db: AsyncSession, cache: CacheService, org_id: str, group_id: str,
+        self, db: AsyncSession, cache: CacheService, org_id: str, group_id: str, agent_id: str,
     ) -> list[dict]:
-        """List tool access settings for a group. Cached."""
-        cache_key = CacheKeys.group_tools(group_id, org_id)
+        """List tool access settings for a group+agent. Cached."""
+        cache_key = CacheKeys.group_tools(group_id, agent_id, org_id)
 
         async def _fetch():
             result = await db.execute(
@@ -289,12 +289,14 @@ class TenantAgentAccessService:
                 .where(
                     CmsGroupToolAccess.org_id == org_id,
                     CmsGroupToolAccess.group_id == group_id,
+                    CmsGroupToolAccess.agent_id == agent_id,
                 )
             )
             return [
                 {
                     "id": str(row.CmsGroupToolAccess.id),
                     "group_id": str(row.CmsGroupToolAccess.group_id),
+                    "agent_id": str(row.CmsGroupToolAccess.agent_id),
                     "tool_id": str(row.CmsGroupToolAccess.tool_id),
                     "tool_codename": row.CmsTool.codename,
                     "tool_name": row.CmsTool.display_name,
@@ -307,13 +309,14 @@ class TenantAgentAccessService:
 
     async def toggle_tool_access(
         self, db: AsyncSession, cache: CacheService, org_id: str,
-        group_id: str, tool_id: str, is_enabled: bool,
+        group_id: str, agent_id: str, tool_id: str, is_enabled: bool,
     ) -> dict:
-        """Toggle a tool's access for a group. Creates record if not exists."""
+        """Toggle a tool's access for a group+agent. Creates record if not exists."""
         result = await db.execute(
             select(CmsGroupToolAccess).where(
                 CmsGroupToolAccess.org_id == org_id,
                 CmsGroupToolAccess.group_id == group_id,
+                CmsGroupToolAccess.agent_id == agent_id,
                 CmsGroupToolAccess.tool_id == tool_id,
             )
         )
@@ -323,7 +326,7 @@ class TenantAgentAccessService:
             access.is_enabled = is_enabled
         else:
             access = CmsGroupToolAccess(
-                group_id=group_id, tool_id=tool_id, org_id=org_id,
+                group_id=group_id, agent_id=agent_id, tool_id=tool_id, org_id=org_id,
                 is_enabled=is_enabled,
                 created_at=datetime.now(timezone.utc),
             )
@@ -334,22 +337,22 @@ class TenantAgentAccessService:
 
         # Invalidate
         inv = CacheInvalidation(cache)
-        await inv.clear_group_tools(group_id, org_id)
+        await inv.clear_group_tools(group_id, agent_id, org_id)
 
         return {
             "id": str(access.id), "group_id": group_id,
-            "tool_id": tool_id, "is_enabled": access.is_enabled,
+            "agent_id": agent_id, "tool_id": tool_id, "is_enabled": access.is_enabled,
         }
 
     async def bulk_toggle_tools(
         self, db: AsyncSession, cache: CacheService, org_id: str,
-        group_id: str, entries: list[dict],
+        group_id: str, agent_id: str, entries: list[dict],
     ) -> list[dict]:
-        """Bulk toggle tool access for a group."""
+        """Bulk toggle tool access for a group+agent."""
         results = []
         for entry in entries:
             r = await self.toggle_tool_access(
-                db, cache, org_id, group_id, entry["tool_id"], entry["is_enabled"],
+                db, cache, org_id, group_id, agent_id, entry["tool_id"], entry["is_enabled"],
             )
             results.append(r)
         return results
@@ -388,6 +391,73 @@ class TenantAgentAccessService:
 
         logger.info(f"Agent {agent_id} is_public={is_public} in org {org_id}")
         return {"agent_id": agent_id, "is_public": is_public}
+
+    # ── Agent tools listing (for tool access UI) ─────────────────────────
+
+    async def list_agent_tools_for_org(
+        self, db: AsyncSession, cache: CacheService, org_id: str, agent_id: str,
+    ) -> list[dict]:
+        """
+        List tools available for an agent. Merges:
+        1. System agent static tools (from AGENT_TOOLS mapping)
+        2. MCP tools assigned to this agent in this org (cms_agent_mcp_server → cms_tool)
+        Cached.
+        """
+        cache_key = CacheKeys.agent_tools_for_org(agent_id, org_id)
+
+        async def _fetch():
+            from app.db_sync.tools import AGENT_TOOLS
+
+            tools_map: dict[str, dict] = {}
+
+            # 1. Static tools from AGENT_TOOLS mapping (system agents)
+            agent = await db.get(CmsAgent, agent_id)
+            if agent:
+                tool_codenames = AGENT_TOOLS.get(agent.codename, [])
+                if tool_codenames:
+                    result = await db.execute(
+                        select(CmsTool, CmsMcpServer.display_name.label("server_name"))
+                        .join(CmsMcpServer, CmsMcpServer.id == CmsTool.mcp_server_id)
+                        .where(CmsTool.codename.in_(tool_codenames))
+                    )
+                    for row in result.all():
+                        tid = str(row.CmsTool.id)
+                        tools_map[tid] = {
+                            "id": tid,
+                            "codename": row.CmsTool.codename,
+                            "display_name": row.CmsTool.display_name,
+                            "description": row.CmsTool.description,
+                            "server_name": row.server_name,
+                        }
+
+            # 2. Tools from MCP servers assigned to this agent in this org
+            result = await db.execute(
+                select(CmsTool, CmsMcpServer.display_name.label("server_name"))
+                .join(CmsMcpServer, CmsMcpServer.id == CmsTool.mcp_server_id)
+                .join(
+                    CmsAgentMcpServer,
+                    and_(
+                        CmsAgentMcpServer.agent_id == agent_id,
+                        CmsAgentMcpServer.org_id == org_id,
+                        CmsAgentMcpServer.is_active.is_(True),
+                        CmsMcpServer.id == CmsAgentMcpServer.mcp_server_id,
+                    )
+                )
+            )
+            for row in result.all():
+                tid = str(row.CmsTool.id)
+                if tid not in tools_map:
+                    tools_map[tid] = {
+                        "id": tid,
+                        "codename": row.CmsTool.codename,
+                        "display_name": row.CmsTool.display_name,
+                        "description": row.CmsTool.description,
+                        "server_name": row.server_name,
+                    }
+
+            return list(tools_map.values())
+
+        return await cache.get_or_set(cache_key, _fetch, ttl=settings.CACHE_DEFAULT_TTL) or []
 
 
 # Singleton

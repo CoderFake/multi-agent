@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db_session, require_org_membership
+from app.core.dependencies import get_db_session, require_permission
 from app.common.types import CurrentUser
 from app.services.tenant_audit import tenant_audit_svc
 
@@ -22,7 +22,7 @@ async def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db_session),
-    user: CurrentUser = Depends(require_org_membership),
+    user: CurrentUser = Depends(require_permission("audit_log.view")),
 ):
     """List audit logs for the current org."""
     items, total = await tenant_audit_svc.list_logs(

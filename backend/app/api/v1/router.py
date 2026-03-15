@@ -20,6 +20,10 @@ from app.api.v1.tenant.audit_logs import router as tenant_audit_router
 from app.api.v1.tenant.notifications import router as tenant_notification_router
 from app.api.v1.tenant.feedback import router as feedback_router  # system-level, NOT tenant
 from app.api.v1.tenant.agent_access import router as tenant_access_router
+from app.api.v1.tenant.providers import router as tenant_provider_router
+from app.api.v1.tenant.knowledge import router as tenant_knowledge_router
+from app.api.v1.tenant.tenant_settings import router as tenant_settings_router
+from app.api.v1.tenant.indexing import router as tenant_indexing_router
 from app.api.v1.assets import router as assets_router
 
 api_router = APIRouter()
@@ -52,6 +56,10 @@ api_router.include_router(tenant_perm_router, prefix="/tenant", tags=["tenant"])
 api_router.include_router(tenant_audit_router, prefix="/tenant", tags=["tenant"])
 api_router.include_router(tenant_notification_router, prefix="/tenant", tags=["tenant"])
 api_router.include_router(tenant_access_router, prefix="/tenant", tags=["tenant"])
+api_router.include_router(tenant_provider_router, prefix="/tenant", tags=["tenant"])
+api_router.include_router(tenant_knowledge_router, prefix="/tenant", tags=["tenant"])
+api_router.include_router(tenant_settings_router, prefix="/tenant", tags=["tenant"])
+api_router.include_router(tenant_indexing_router, prefix="/tenant", tags=["tenant"])
 
 # Asset serving (MinIO proxy)
 api_router.include_router(assets_router, tags=["assets"])

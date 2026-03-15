@@ -25,6 +25,21 @@ class SearchRequest(BaseModel):
         le=100,
         description="Maximum number of results to return",
     )
+    org_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="Organization ID for access control",
+    )
+    user_role: str = Field(
+        default="member",
+        max_length=20,
+        description="Caller's org role (owner/admin/member)",
+    )
+    user_group_ids: list[str] = Field(
+        default_factory=list,
+        description="Caller's group IDs for access filtering",
+    )
 
     @field_validator("query")
     @classmethod

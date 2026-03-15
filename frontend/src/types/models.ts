@@ -4,6 +4,20 @@
  */
 
 // ============================================================================
+// Invite
+// ============================================================================
+
+export interface Invite {
+  id: string;
+  email: string;
+  org_id: string;
+  org_role: string;
+  status: "pending" | "accepted" | "expired" | "revoked";
+  expires_at: string;
+  created_at: string;
+}
+
+// ============================================================================
 // Organization
 // ============================================================================
 
@@ -256,6 +270,16 @@ export interface FeedbackListResponse {
 // Tenant User (org-scoped)
 // ============================================================================
 
+export interface TimezoneOption {
+    value: string;
+    label: string;
+}
+
+export interface TenantOrgUpdateData {
+    name?: string;
+    timezone?: string;
+}
+
 export interface TenantUser {
   user_id: string;
   email: string;
@@ -314,11 +338,13 @@ export interface AuditLog {
   id: string;
   user_id: string;
   user_email: string | null;
+  user_full_name: string | null;
   action: string;
   resource_type: string;
   resource_id: string | null;
   old_values: Record<string, unknown> | null;
   new_values: Record<string, unknown> | null;
+  ip_address: string | null;
   created_at: string;
 }
 
@@ -335,6 +361,11 @@ export interface Agent {
   is_system: boolean;
   is_enabled: boolean;
   is_public: boolean;
+  provider_id: string | null;
+  model_id: string | null;
+  provider_name: string | null;
+  model_name: string | null;
+  has_provider: boolean;
 }
 
 export interface AgentCreate {
@@ -342,6 +373,8 @@ export interface AgentCreate {
   display_name: string;
   description?: string;
   default_config?: Record<string, unknown>;
+  provider_id?: string;
+  model_id?: string;
 }
 
 export interface AgentUpdate {
@@ -349,6 +382,15 @@ export interface AgentUpdate {
   description?: string;
   default_config?: Record<string, unknown>;
   is_active?: boolean;
+  provider_id?: string;
+  model_id?: string;
+}
+
+export interface ProviderWithKeys {
+  id: string;
+  name: string;
+  slug: string;
+  api_base_url: string;
 }
 
 // ============================================================================
@@ -368,11 +410,13 @@ export interface AgentMcpServer {
 }
 
 export interface AvailableMcpServer {
-    id: string;
-    codename: string;
-    display_name: string;
-    transport: string;
-    requires_env_vars: boolean;
+  id: string;
+  codename: string;
+  display_name: string;
+  transport: string;
+  requires_env_vars: boolean;
+  is_system: boolean;
+  is_active: boolean;
 }
 
 export interface GroupAgent {
@@ -386,8 +430,175 @@ export interface GroupAgent {
 export interface GroupToolAccess {
   id: string;
   group_id: string;
+  agent_id: string;
   tool_id: string;
   tool_codename: string;
   tool_name: string;
   is_enabled: boolean;
+}
+
+
+export interface AgentTool {
+  id: string;
+  codename: string;
+  display_name: string;
+  description: string;
+  server_name: string;
+}
+
+// ============================================================================
+// Provider Keys (Tenant)
+// ============================================================================
+
+export interface ProviderKey {
+  id: string;
+  provider_id: string;
+  org_id: string;
+  key_preview: string;
+  priority: number;
+  is_active: boolean;
+  last_used_at: string | null;
+  cooldown_until: string | null;
+  created_at: string;
+}
+
+export interface ProviderKeyCreate {
+  api_key: string;
+  priority?: number;
+}
+
+export interface ProviderKeyUpdate {
+  priority?: number;
+  is_active?: boolean;
+}
+
+// ============================================================================
+// Agent-Provider Mapping (Tenant)
+// ============================================================================
+
+export interface AgentProviderMapping {
+  id: string;
+  org_id: string;
+  agent_id: string;
+  provider_id: string;
+  model_id: string;
+  config_override: Record<string, unknown> | null;
+  is_active: boolean;
+}
+
+export interface AgentProviderCreate {
+  agent_id: string;
+  provider_id: string;
+  model_id: string;
+  config_override?: Record<string, unknown>;
+}
+
+export interface AgentProviderUpdate {
+  model_id?: string;
+  config_override?: Record<string, unknown>;
+  is_active?: boolean;
+}
+
+// ============================================================================
+// Agent Model
+// ============================================================================
+
+export interface AgentModel {
+  id: string;
+  provider_id: string;
+  name: string;
+  model_type: string;
+  context_window: number | null;
+  pricing_per_1m_tokens: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+// ============================================================================
+// Knowledge — Folders & Documents (Tenant)
+// ============================================================================
+
+export interface KnowledgeFolder {
+  id: string;
+  org_id: string;
+  parent_id: string | null;
+  name: string;
+  description: string | null;
+  access_type: string;
+  sort_order: number;
+  created_at: string;
+  document_count: number;
+}
+
+export interface FolderCreate {
+  name: string;
+  description?: string;
+  parent_id?: string;
+  access_type?: string;
+}
+
+export interface FolderUpdate {
+  name?: string;
+  description?: string;
+  access_type?: string;
+  sort_order?: number;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  org_id: string;
+  folder_id: string;
+  uploaded_by: string | null;
+  title: string;
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  access_type: string;
+  index_status: string;
+  chunk_count: number;
+  indexed_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface FolderAccess {
+  id: string;
+  folder_id: string;
+  group_id: string;
+  group_name: string;
+  can_read: boolean;
+  can_write: boolean;
+}
+
+export interface AgentKnowledgeSource {
+  id: string;
+  org_id: string;
+  agent_id: string;
+  folder_id: string | null;
+  document_id: string | null;
+  created_at: string;
+}
+
+// ── Indexing ─────────────────────────────────────────────────────────────
+
+export interface IndexingProgress {
+  job_id: string;
+  document_id: string;
+  status: string;
+  progress: number;
+  message: string;
+  total_chunks: number;
+  processed_chunks: number;
+  error?: string | null;
+}
+
+export interface ActiveIndexJob {
+  id: string;
+  document_id: string;
+  status: string;
+  total_chunks: number;
+  processed_chunks: number;
+  error_message?: string | null;
+  started_at?: string | null;
+  created_at: string;
 }

@@ -44,8 +44,8 @@ async def lifespan(app: FastAPI):
             await sync_default_groups(db, perm_map)
             provider_map = await sync_providers(db)
             await sync_models(db, provider_map)
-            # server_map = await sync_tool_servers(db)
-            # await sync_tools(db, server_map)
+            server_map = await sync_tool_servers(db)
+            await sync_tools(db, server_map)
             await sync_agents(db)
             await sync_superuser(db)
 

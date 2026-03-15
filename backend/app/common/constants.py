@@ -152,11 +152,12 @@ class NotificationType:
     GROUP_DELETED = "group_deleted"
     PERMISSION_UPDATED = "permission_updated"
     FEEDBACK_SUBMITTED = "feedback_submitted"
+    FEEDBACK_RESOLVED = "feedback_resolved"
 
     ALL = {
         INVITE_ACCEPTED, ROLE_CHANGED, MEMBER_REMOVED,
         GROUP_ADDED, GROUP_REMOVED, GROUP_DELETED,
-        PERMISSION_UPDATED, FEEDBACK_SUBMITTED,
+        PERMISSION_UPDATED, FEEDBACK_SUBMITTED, FEEDBACK_RESOLVED,
     }
 
 
@@ -194,6 +195,8 @@ class NotificationCode:
     # Feedback
     FEEDBACK_SUBMITTED = "notification.feedback_submitted"
     FEEDBACK_SUBMITTED_DESC = "notification.feedback_submitted_desc"
+    FEEDBACK_RESOLVED = "notification.feedback_resolved"
+    FEEDBACK_RESOLVED_DESC = "notification.feedback_resolved_desc"
 
 class Timezone:
     """Supported timezone constants.

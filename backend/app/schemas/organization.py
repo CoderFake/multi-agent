@@ -32,6 +32,12 @@ class OrgUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class TenantOrgUpdate(BaseModel):
+    """PATCH /tenant/settings — tenant-level org update (organization.update permission)."""
+    name: Optional[str] = None
+    timezone: Optional[str] = None
+
+
 class OrgResponse(CmsBaseSchema):
     """Organization response."""
     id: StrUUID

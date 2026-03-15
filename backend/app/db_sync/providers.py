@@ -50,41 +50,45 @@ PROVIDERS = [
 
 MODELS: dict[str, list[dict]] = {
     "google": [
+        # Gemini 3.x series (2026)
+        {"name": "gemini-3.1-pro",           "model_type": "chat",      "context_window": 2097152, "pricing": 2.50},
+        {"name": "gemini-3-flash",           "model_type": "chat",      "context_window": 1048576, "pricing": 0.20},
+        {"name": "gemini-3.1-flash-lite",    "model_type": "chat",      "context_window": 1048576, "pricing": 0.10},
         # Gemini 2.5 series
         {"name": "gemini-2.5-pro",           "model_type": "chat",      "context_window": 1048576, "pricing": 1.25},
         {"name": "gemini-2.5-flash",         "model_type": "chat",      "context_window": 1048576, "pricing": 0.15},
-        # Gemini 2.0 series
-        {"name": "gemini-2.0-flash",         "model_type": "chat",      "context_window": 1048576, "pricing": 0.10},
-        # Gemini 3 series (preview)
-        {"name": "gemini-3-flash-preview",   "model_type": "chat",      "context_window": 1048576, "pricing": 0.10},
         # Embedding
         {"name": "text-embedding-004",       "model_type": "embedding", "context_window": 2048,    "pricing": 0.006},
     ],
     "openai": [
-        # GPT-4o series
-        {"name": "gpt-4o",                   "model_type": "chat",      "context_window": 128000,  "pricing": 2.50},
-        {"name": "gpt-4o-mini",              "model_type": "chat",      "context_window": 128000,  "pricing": 0.15},
+        # GPT-5 series (2026)
+        {"name": "gpt-5.4",                  "model_type": "chat",      "context_window": 1000000, "pricing": 1.25},
+        {"name": "gpt-5.4-pro",              "model_type": "chat",      "context_window": 1000000, "pricing": 15.00},
+        {"name": "gpt-5-mini",               "model_type": "chat",      "context_window": 400000,  "pricing": 0.125},
+        {"name": "gpt-5-nano",               "model_type": "chat",      "context_window": 400000,  "pricing": 0.025},
         # GPT-4.1 series
-        {"name": "gpt-4.1",                  "model_type": "chat",      "context_window": 1047576, "pricing": 2.00},
-        {"name": "gpt-4.1-mini",             "model_type": "chat",      "context_window": 1047576, "pricing": 0.40},
-        {"name": "gpt-4.1-nano",             "model_type": "chat",      "context_window": 1047576, "pricing": 0.10},
-        # o-series (reasoning)
-        {"name": "o4-mini",                  "model_type": "chat",      "context_window": 200000,  "pricing": 1.10},
-        {"name": "o3",                       "model_type": "chat",      "context_window": 200000,  "pricing": 2.00},
-        {"name": "o3-mini",                  "model_type": "chat",      "context_window": 200000,  "pricing": 1.10},
+        {"name": "gpt-4.1",                  "model_type": "chat",      "context_window": 1047576, "pricing": 3.50},
+        {"name": "gpt-4.1-mini",             "model_type": "chat",      "context_window": 1047576, "pricing": 0.70},
+        # o-series (reasoning, 2026)
+        {"name": "o4-mini",                  "model_type": "chat",      "context_window": 200000,  "pricing": 2.00},
+        {"name": "o3",                       "model_type": "chat",      "context_window": 200000,  "pricing": 3.50},
         # Embedding
         {"name": "text-embedding-3-small",   "model_type": "embedding", "context_window": 8191,    "pricing": 0.02},
         {"name": "text-embedding-3-large",   "model_type": "embedding", "context_window": 8191,    "pricing": 0.13},
     ],
     "anthropic": [
-        {"name": "claude-sonnet-4-20250514",   "model_type": "chat",      "context_window": 200000,  "pricing": 3.00},
+        # Claude 4 series (2026)
+        {"name": "claude-opus-4-6",            "model_type": "chat",      "context_window": 200000,  "pricing": 5.00},
+        {"name": "claude-sonnet-4-6",          "model_type": "chat",      "context_window": 200000,  "pricing": 3.00},
+        {"name": "claude-haiku-4-5",           "model_type": "chat",      "context_window": 200000,  "pricing": 1.00},
+        # Claude 3.7 (still active)
         {"name": "claude-3-7-sonnet-20250219", "model_type": "chat",      "context_window": 200000,  "pricing": 3.00},
-        {"name": "claude-3-5-haiku-20241022",  "model_type": "chat",      "context_window": 200000,  "pricing": 0.80},
     ],
     "ollama": [
-        {"name": "llama3.3",                 "model_type": "chat",      "context_window": 131072,  "pricing": 0},
-        {"name": "qwen3",                    "model_type": "chat",      "context_window": 131072,  "pricing": 0},
-        {"name": "gemma3",                   "model_type": "chat",      "context_window": 131072,  "pricing": 0},
+        {"name": "llama3.3:70b",             "model_type": "chat",      "context_window": 131072,  "pricing": 0},
+        {"name": "qwen3:14b",                "model_type": "chat",      "context_window": 131072,  "pricing": 0},
+        {"name": "deepseek-r1:32b",          "model_type": "chat",      "context_window": 131072,  "pricing": 0},
+        {"name": "gemma3:12b",               "model_type": "chat",      "context_window": 131072,  "pricing": 0},
         {"name": "nomic-embed-text",         "model_type": "embedding", "context_window": 8192,    "pricing": 0},
     ],
 }

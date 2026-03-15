@@ -15,7 +15,7 @@ const variantMap: Record<StatusVariant, { className: string; label: string }> = 
     label: "Active",
   },
   inactive: {
-    className: "bg-zinc-500/10 text-zinc-600 border-zinc-500/20 dark:text-zinc-400",
+    className: "bg-muted text-muted-foreground border-border",
     label: "Inactive",
   },
   pending: {

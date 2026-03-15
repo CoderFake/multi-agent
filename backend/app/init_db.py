@@ -16,6 +16,7 @@ from app.db_sync import (
     sync_agents,
     sync_tool_servers,
     sync_tools,
+    sync_settings,
 )
 from app.utils.logging import get_logger
 
@@ -45,6 +46,9 @@ async def init_db() -> None:
 
             # 5. Superuser
             await sync_superuser(db)
+
+            # 6. System settings
+            await sync_settings(db)
 
             logger.info("Database initialization complete!")
             break

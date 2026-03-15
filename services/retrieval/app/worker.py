@@ -1,127 +1,123 @@
-"""RabbitMQ consumers for the retrieval microservice.
+"""Worker — RabbitMQ consumers + Redis indexing consumer.
 
-Two consumers run in background daemon threads:
-
-1. **Indexing consumer** — listens on `indexing_tasks` queue for document
-   indexing requests dispatched by the main backend.
-
-2. **RAG RPC consumer** — listens on `rag_requests` queue for search/file
-   queries from sagent.  Processes the request and publishes the response
-   back to the caller's `reply_to` queue with matching `correlation_id`.
-
-Message format (RAG RPC):
-    Request:  {"action": "search"|"list_files", ...payload}
-    Response: JSON-serialized SearchResponse / ListFilesResponse
+Runs in background threads alongside the FastAPI application.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import threading
+import traceback
+from typing import Optional
 
 import pika
 
-from app.config import settings
-from app.schemas.files import ListFilesRequest
-from app.schemas.index import IndexRequest
-from app.schemas.search import SearchRequest
-from app.services.file_service import file_svc
-from app.services.index_service import index_svc
-from app.services.search_service import search_svc
+from app.config.settings import settings
+from app.core.redis import pop_task
+from app.schemas.events import IndexTaskPayload
 
 logger = logging.getLogger(__name__)
 
 
-# ── Indexing consumer ──────────────────────────────────────────────────
+# ── Redis Indexing Consumer ───────────────────────────────────────────
 
-def _process_indexing(ch, method, _properties, body):
-    """Process a single indexing task from RabbitMQ."""
-    try:
-        payload = json.loads(body)
-        request = IndexRequest.model_validate(payload)
-        logger.info(
-            f"Processing indexing task: {len(request.documents)} docs → "
-            f"{request.collection_name}"
-        )
-        asyncio.get_event_loop().run_until_complete(
-            index_svc.index_documents(request)
-        )
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-    except Exception as e:
-        logger.exception(f"Failed to process indexing task: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-
-
-# ── RAG RPC consumer ──────────────────────────────────────────────────
-
-def _process_rag_request(ch, method, properties, body):
-    """Process a RAG RPC request and reply to the caller.
-
-    Expected payload: {"action": "search"|"list_files", ...fields}
-    Publishes JSON response to properties.reply_to with matching correlation_id.
+def _run_indexing_consumer_sync():
     """
+    Blocking consumer: BRPOP idx:queue, process each indexing task.
+    Runs in a dedicated thread.
+    """
+    logger.info("Redis indexing consumer started")
+
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    while True:
+        try:
+            task_data = pop_task(timeout=5)
+            if task_data is None:
+                continue
+
+            payload = IndexTaskPayload(**task_data)
+            logger.info(
+                "Indexing task received: job=%s doc=%s",
+                payload.job_id, payload.document_id,
+            )
+
+            # Import here to avoid circular imports
+            from app.services.index_service import process_indexing_task
+
+            loop.run_until_complete(process_indexing_task(payload))
+
+        except Exception as e:
+            logger.error("Indexing consumer error: %s", e)
+            logger.error(traceback.format_exc())
+
+
+def start_indexing_consumer():
+    """Start the Redis indexing consumer in a daemon thread."""
+    thread = threading.Thread(
+        target=_run_indexing_consumer_sync,
+        name="indexing-consumer",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("Indexing consumer thread started")
+    return thread
+
+
+# ── RabbitMQ RAG Consumer ─────────────────────────────────────────────
+
+def _on_rag_request(ch, method, properties, body):
+    """Handle RAG RPC request from RabbitMQ."""
     try:
-        payload = json.loads(body)
-        action = payload.pop("action", None)
-        logger.info(f"RAG RPC request: action={action}")
+        data = json.loads(body)
+        query = data.get("query", "")
+        org_id = data.get("org_id", "")
+        org_subdomain = data.get("org_subdomain", "")
+        agent_code = data.get("agent_code", "")
+        user_group_ids = data.get("user_group_ids", [])
+        user_role = data.get("user_role", "member")
+        top_k = data.get("top_k", settings.DEFAULT_TOP_K)
 
-        if action == "search":
-            request = SearchRequest.model_validate(payload)
-            result = asyncio.get_event_loop().run_until_complete(
-                search_svc.search(request)
+        # Import here to avoid circular imports
+        from app.services.search_service import search
+        loop = asyncio.new_event_loop()
+        results = loop.run_until_complete(
+            search(
+                query=query,
+                org_id=org_id,
+                org_subdomain=org_subdomain,
+                agent_code=agent_code,
+                user_group_ids=user_group_ids,
+                user_role=user_role,
+                top_k=top_k,
             )
-            response_body = result.model_dump_json()
+        )
+        loop.close()
 
-        elif action == "list_files":
-            request = ListFilesRequest.model_validate(payload)
-            result = asyncio.get_event_loop().run_until_complete(
-                file_svc.list_files(request)
-            )
-            response_body = result.model_dump_json()
-
-        else:
-            response_body = json.dumps({"error": f"Unknown action: {action}"})
-
+        response = json.dumps({"results": results})
     except Exception as e:
-        logger.exception(f"RAG RPC processing failed: {e}")
-        response_body = json.dumps({"error": str(e)})
+        logger.error("RAG request error: %s", e)
+        response = json.dumps({"results": [], "error": str(e)})
 
-    # Publish response back to caller
+    # RPC reply
     if properties.reply_to:
         ch.basic_publish(
             exchange="",
             routing_key=properties.reply_to,
             properties=pika.BasicProperties(
                 correlation_id=properties.correlation_id,
-                content_type="application/json",
             ),
-            body=response_body,
+            body=response.encode(),
         )
-
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
-# ── Consumer runners ──────────────────────────────────────────────────
-
-def _run_indexing_consumer():
-    """Run the indexing queue consumer (blocking)."""
-    try:
-        params = pika.URLParameters(settings.RABBITMQ_URL)
-        connection = pika.BlockingConnection(params)
-        channel = connection.channel()
-
-        channel.queue_declare(queue=settings.QUEUE_INDEXING, durable=True)
-        channel.basic_qos(prefetch_count=1)
-        channel.basic_consume(queue=settings.QUEUE_INDEXING, on_message_callback=_process_indexing)
-
-        logger.info(f"Indexing consumer listening on queue: {settings.QUEUE_INDEXING}")
-        channel.start_consuming()
-    except Exception as e:
-        logger.error(f"Indexing consumer error: {e}")
-
-
-def _run_rag_consumer():
-    """Run the RAG RPC queue consumer (blocking)."""
+def _run_rabbitmq_consumer():
+    """RabbitMQ consumer for RAG RPC requests."""
     try:
         params = pika.URLParameters(settings.RABBITMQ_URL)
         connection = pika.BlockingConnection(params)
@@ -129,23 +125,25 @@ def _run_rag_consumer():
 
         channel.queue_declare(queue=settings.QUEUE_RAG_REQUESTS, durable=True)
         channel.basic_qos(prefetch_count=1)
-        channel.basic_consume(queue=settings.QUEUE_RAG_REQUESTS, on_message_callback=_process_rag_request)
+        channel.basic_consume(
+            queue=settings.QUEUE_RAG_REQUESTS,
+            on_message_callback=_on_rag_request,
+        )
 
-        logger.info(f"RAG RPC consumer listening on queue: {settings.QUEUE_RAG_REQUESTS}")
+        logger.info("RabbitMQ RAG consumer started on %s", settings.QUEUE_RAG_REQUESTS)
         channel.start_consuming()
     except Exception as e:
-        logger.error(f"RAG RPC consumer error: {e}")
+        logger.error("RabbitMQ consumer failed: %s", e)
+        logger.error(traceback.format_exc())
 
 
-def start_consumers():
-    """Start all RabbitMQ consumers in background daemon threads."""
-    threads = []
-    for name, target in [
-        ("rabbitmq-indexing", _run_indexing_consumer),
-        ("rabbitmq-rag-rpc", _run_rag_consumer),
-    ]:
-        t = threading.Thread(target=target, daemon=True, name=name)
-        t.start()
-        threads.append(t)
-    return threads
-
+def start_rabbitmq_consumer():
+    """Start the RabbitMQ consumer in a daemon thread."""
+    thread = threading.Thread(
+        target=_run_rabbitmq_consumer,
+        name="rabbitmq-consumer",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("RabbitMQ consumer thread started")
+    return thread

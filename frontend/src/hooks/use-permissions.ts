@@ -12,7 +12,7 @@ import type { UIPermissions } from "@/types/models";
 export function usePermissions() {
   const { orgId } = useCurrentOrg();
   const [permissions, setPermissions] = useState<UIPermissions | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!orgId) {

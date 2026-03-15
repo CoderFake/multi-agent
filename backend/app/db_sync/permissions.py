@@ -38,6 +38,7 @@ CONTENT_TYPES = [
     ("cms", "ui_component"),
     ("cms", "agent_mcp"),
     ("cms", "tool_access"),
+    ("cms", "folder_access"),
 ]
 
 # ── Permission definitions ────────────────────────────────────────────
@@ -65,6 +66,7 @@ PERMISSIONS: dict[str, list[str]] = {
 
     # Knowledge
     "folder":          ["view", "create", "update", "delete"],
+    "folder_access":   ["manage"],
     "document":        ["view", "create", "update", "delete", "upload"],
 
     # Other
@@ -79,7 +81,7 @@ ACTION_LABELS = {
     "view": "View", "create": "Create", "update": "Update",
     "delete": "Delete", "invite": "Invite", "assign": "Assign",
     "revoke": "Revoke", "resend": "Resend", "deploy": "Deploy",
-    "upload": "Upload", "export": "Export",
+    "upload": "Upload", "export": "Export", "manage": "Manage",
 }
 
 # ── Default group templates (system-level, org_id=NULL) ───────────────

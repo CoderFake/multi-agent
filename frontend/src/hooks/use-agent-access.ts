@@ -7,6 +7,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { useCurrentOrg } from "@/contexts/org-context";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
     fetchTenantAgents,
     fetchAgentMcpServers,
@@ -32,8 +33,10 @@ export function useAgents() {
 /** Fetch MCP servers attached to an agent. */
 export function useAgentMcpServers(agentId: string | null) {
     const { orgId } = useCurrentOrg();
+    const { hasPermission } = usePermissions();
+    const canViewMcp = hasPermission("agent_mcp.view");
     const { data, mutate, isLoading } = useSWR(
-        agentId && orgId ? ["agent-mcps", agentId, orgId] : null,
+        agentId && orgId && canViewMcp ? ["agent-mcps", agentId, orgId] : null,
         () => fetchAgentMcpServers(agentId!),
     );
     return { mcpServers: data ?? [], mutateMcps: mutate, isLoading };
@@ -42,8 +45,10 @@ export function useAgentMcpServers(agentId: string | null) {
 /** Fetch groups for the org. */
 export function useGroups() {
     const { orgId } = useCurrentOrg();
+    const { hasPermission } = usePermissions();
+    const canViewGroups = hasPermission("group.view");
     const { data, isLoading } = useSWR(
-        orgId ? ["tenant-groups-list", orgId] : null,
+        orgId && canViewGroups ? ["tenant-groups-list", orgId] : null,
         () => fetchTenantGroups(),
     );
     const groups: Group[] = data?.items ?? [];
@@ -86,13 +91,13 @@ export function useToggleAgentPublic(mutateAgents: () => void) {
     }, [mutateAgents, t]);
 }
 
-/** Assign agents to group. */
-export function useAssignAgentToGroup(mutateAgentGroups: () => void) {
+/** Assign an agent to multiple groups at once. */
+export function useAssignAgentToGroups(mutateAgentGroups: () => void) {
     const t = useTranslations("tenant");
 
-    return useCallback(async (groupId: string, agentId: string) => {
+    return useCallback(async (groupIds: string[], agentId: string) => {
         try {
-            await assignAgentsToGroup(groupId, [agentId]);
+            await Promise.all(groupIds.map((gid) => assignAgentsToGroup(gid, [agentId])));
             toast.success(t("groupAssigned"));
             mutateAgentGroups();
         } catch {

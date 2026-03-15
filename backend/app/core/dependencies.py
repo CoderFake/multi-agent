@@ -6,7 +6,7 @@ import json
 
 from fastapi import Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, exists, and_
 from redis.asyncio import Redis
 
 from app.core.database import get_db as get_db_session, get_redis  # re-export
@@ -16,8 +16,11 @@ from app.common.constants import ErrorCode
 from app.common.types import CurrentUser
 from app.models.user import CmsUser
 from app.models.organization import CmsOrgMembership
-from app.cache.keys import CacheKeys
+from app.cache.keys import CacheKeys        
 from app.cache.service import CacheService
+from app.models.document import CmsDocument, CmsDocumentAccess
+from app.models.folder import CmsFolder
+from app.models.group import cms_user_groups
 from app.services.permission import permission_svc
 from app.config.settings import settings
 
@@ -241,3 +244,64 @@ def require_permission(codename: str):
         return user
 
     return _check
+
+
+# ── Resource-level access control ────────────────────────────────────
+
+def require_document_access(param_name: str = "document_id"):
+    """
+    Factory: returns a dependency that checks folder-level access for a document.
+    - Owner / admin / superuser → bypass
+    - Public folder → allow
+    - Restricted folder → user must belong to a group with can_read
+    """
+    async def _check(
+        request: Request,
+        db: AsyncSession = Depends(get_db_session),
+        user: CurrentUser = Depends(require_org_membership),
+    ) -> CurrentUser:
+
+        # Owner/admin/superuser bypass
+        if user.org_role in ("owner", "admin", "superuser"):
+            return user
+
+        document_id = request.path_params.get(param_name)
+        if not document_id:
+            return user
+
+        doc = await db.get(CmsDocument, document_id)
+        if not doc or str(doc.org_id) != user.org_id:
+            raise CmsException(
+                error_code="DOCUMENT_NOT_FOUND",
+                detail="Document not found",
+                status_code=404,
+            )
+
+        folder = await db.get(CmsFolder, str(doc.folder_id))
+        if not folder or folder.access_type != "restricted":
+            return user  # public folder → allow
+
+        # Restricted folder → check group membership
+        has_access = await db.scalar(
+            select(exists().where(
+                and_(
+                    CmsDocumentAccess.folder_id == doc.folder_id,
+                    CmsDocumentAccess.can_read == True,  # noqa: E712
+                    CmsDocumentAccess.group_id.in_(
+                        select(cms_user_groups.c.group_id).where(
+                            cms_user_groups.c.user_id == user.user_id,
+                        )
+                    ),
+                )
+            ))
+        )
+        if not has_access:
+            raise CmsException(
+                error_code="ACCESS_DENIED",
+                detail="You do not have access to this document",
+                status_code=403,
+            )
+        return user
+
+    return _check
+

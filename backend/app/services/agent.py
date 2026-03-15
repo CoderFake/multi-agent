@@ -12,6 +12,7 @@ from app.cache.keys import CacheKeys
 from app.cache.service import CacheService
 from app.cache.invalidation import CacheInvalidation
 from app.models.agent import CmsAgent, CmsOrgAgent
+from app.models.agent_access import CmsGroupAgent, CmsAgentMcpServer
 from app.models.mcp import CmsTool, CmsMcpServer
 from app.models.organization import CmsOrganization
 from app.utils.logging import get_logger
@@ -91,41 +92,47 @@ class AgentService:
 
         await CacheInvalidation(cache).clear_system_agents()
 
-    # ── is_public toggle ─────────────────────────────────────────────────
-
     async def set_public(
         self, db: AsyncSession, cache: CacheService, agent_id: str, is_public: bool
     ) -> CmsAgent:
         """
         Toggle is_public on a system agent.
         - is_public=True: delete all CmsOrgAgent rows (agent available to ALL orgs)
-        - is_public=False: just set the flag (no org assignments)
-        Invalidates: sys:agents + org_agents:* for all affected orgs.
+        - is_public=False: delete CmsOrgAgent + CmsGroupAgent + CmsAgentMcpServer rows
+          (orgs must re-enable and reconfigure from scratch)
+        Invalidates: sys:agents + org_agents:* + access control caches.
         """
         agent = await self.get(db, agent_id)
         inv = CacheInvalidation(cache)
 
-        if is_public:
-            result = await db.execute(
-                select(CmsOrgAgent.org_id).where(CmsOrgAgent.agent_id == agent.id)
-            )
-            affected_org_ids = [str(r) for r in result.scalars().all()]
+        result = await db.execute(
+            select(CmsOrgAgent.org_id).where(CmsOrgAgent.agent_id == agent.id)
+        )
+        affected_org_ids = [str(r) for r in result.scalars().all()]
 
+        await db.execute(
+            delete(CmsOrgAgent).where(CmsOrgAgent.agent_id == agent.id)
+        )
+
+        if not is_public:
             await db.execute(
-                delete(CmsOrgAgent).where(CmsOrgAgent.agent_id == agent.id)
+                delete(CmsGroupAgent).where(CmsGroupAgent.agent_id == agent.id)
             )
-            agent.is_public = True
+            await db.execute(
+                delete(CmsAgentMcpServer).where(CmsAgentMcpServer.agent_id == str(agent.id))
+            )
 
-            # Invalidate cache for affected orgs
-            for org_id in affected_org_ids:
-                await inv.clear_org_agents(org_id)
-        else:
-            agent.is_public = False
-            await inv.clear_all_org_agents_cache()
-
+        agent.is_public = is_public
         await db.commit()
         await db.refresh(agent)
+
+        for org_id in affected_org_ids:
+            await inv.clear_org_agents(org_id)
+            await inv.clear_all_access_control(org_id)
+        await inv.clear_all_org_agents_cache()
         await inv.clear_system_agents()
+
+        logger.info(f"Agent {agent_id} is_public={is_public}, cleaned up {len(affected_org_ids)} orgs")
         return agent
 
     # ── Org assignment ────────────────────────────────────────────────────

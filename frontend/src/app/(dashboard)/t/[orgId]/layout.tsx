@@ -3,9 +3,11 @@
 import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useCurrentOrg } from "@/contexts/org-context";
+import { IndexingProvider } from "@/contexts/indexing-context";
 
 /**
  * Tenant layout — syncs orgId from URL params to OrgContext.
+ * Wraps with IndexingProvider for global progress tracking + toast.
  * Route: /t/[orgId]/...
  */
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
@@ -20,5 +22,9 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
         }
     }, [urlOrgId, orgId, switchOrg]);
 
-    return <>{children}</>;
+    return (
+        <IndexingProvider>
+            {children}
+        </IndexingProvider>
+    );
 }

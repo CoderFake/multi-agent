@@ -32,16 +32,11 @@ import {
     DialogFooter,
     DialogDescription,
 } from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UserPlus, ShieldPlus, X } from "lucide-react";
+import { UserPlus, ShieldPlus, X, Search } from "lucide-react";
 
 export default function GroupDetailPage() {
     const t = useTranslations("common");
@@ -54,8 +49,9 @@ export default function GroupDetailPage() {
 
     // Add member dialog
     const [addMemberOpen, setAddMemberOpen] = useState(false);
-    const [selectedUserId, setSelectedUserId] = useState("");
+    const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
     const [addingMember, setAddingMember] = useState(false);
+    const [memberSearch, setMemberSearch] = useState("");
 
     // Remove member
     const [removeMember, setRemoveMember] = useState<TenantUser | null>(null);
@@ -100,20 +96,21 @@ export default function GroupDetailPage() {
 
     // Handlers
     const handleAddMember = useCallback(async () => {
-        if (!selectedUserId) return;
+        if (selectedUserIds.size === 0) return;
         setAddingMember(true);
         try {
-            await addGroupMember(groupId, selectedUserId);
+            await addGroupMember(groupId, Array.from(selectedUserIds));
             toast.success(tg("memberAdded"));
             setAddMemberOpen(false);
-            setSelectedUserId("");
+            setSelectedUserIds(new Set());
+            setMemberSearch("");
             mutateMembers();
         } catch (err) {
             showError(err);
         } finally {
             setAddingMember(false);
         }
-    }, [groupId, selectedUserId, mutateMembers, tg, t]);
+    }, [groupId, selectedUserIds, mutateMembers, tg, t]);
 
     const handleRemoveMember = useCallback(async () => {
         if (!removeMember) return;
@@ -286,35 +283,94 @@ export default function GroupDetailPage() {
             </Tabs>
 
             {/* Add Member Dialog */}
-            <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
-                <DialogContent>
+            <Dialog open={addMemberOpen} onOpenChange={(v) => {
+                setAddMemberOpen(v);
+                if (!v) { setSelectedUserIds(new Set()); setMemberSearch(""); }
+            }}>
+                <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">
                     <DialogHeader>
                         <DialogTitle>{tg("addMember")}</DialogTitle>
                         <DialogDescription>{tg("addMemberDesc")}</DialogDescription>
                     </DialogHeader>
-                    <div className="py-2">
-                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder={tg("selectUser")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableUsers.map((u: TenantUser) => (
-                                    <SelectItem key={u.user_id} value={u.user_id}>
-                                        {u.full_name} ({u.email})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder={t("search")}
+                            value={memberSearch}
+                            onChange={(e) => setMemberSearch(e.target.value)}
+                            className="pl-8 h-9"
+                        />
                     </div>
-                    <DialogFooter>
+                    <ScrollArea className="h-[400px] -mx-6 px-6">
+                        {(() => {
+                            const filtered = availableUsers.filter((u: TenantUser) =>
+                                u.full_name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+                                u.email.toLowerCase().includes(memberSearch.toLowerCase())
+                            );
+                            if (filtered.length === 0) {
+                                return (
+                                    <p className="text-sm text-muted-foreground text-center py-8">
+                                        {tg("noUsersFound")}
+                                    </p>
+                                );
+                            }
+                            return (
+                                <div className="space-y-1 py-1">
+                                    {filtered.length > 1 && (
+                                        <label className="flex items-center gap-3 rounded-md px-3 py-2 cursor-pointer hover:bg-muted/50 border-b border-border/40 mb-1">
+                                            <Checkbox
+                                                checked={filtered.every((u: TenantUser) => selectedUserIds.has(u.user_id))}
+                                                onCheckedChange={() => {
+                                                    const allSelected = filtered.every((u: TenantUser) => selectedUserIds.has(u.user_id));
+                                                    setSelectedUserIds((prev) => {
+                                                        const next = new Set(prev);
+                                                        filtered.forEach((u: TenantUser) => {
+                                                            if (allSelected) next.delete(u.user_id);
+                                                            else next.add(u.user_id);
+                                                        });
+                                                        return next;
+                                                    });
+                                                }}
+                                            />
+                                            <span className="text-xs text-muted-foreground">{t("selectAll")} ({filtered.length})</span>
+                                        </label>
+                                    )}
+                                    {filtered.map((u: TenantUser) => (
+                                        <label
+                                            key={u.user_id}
+                                            className="flex items-center gap-3 rounded-md px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                                        >
+                                            <Checkbox
+                                                checked={selectedUserIds.has(u.user_id)}
+                                                onCheckedChange={() => {
+                                                    setSelectedUserIds((prev) => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(u.user_id)) next.delete(u.user_id);
+                                                        else next.add(u.user_id);
+                                                        return next;
+                                                    });
+                                                }}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium truncate">{u.full_name}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] shrink-0">{u.org_role}</Badge>
+                                        </label>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                    </ScrollArea>
+                    <DialogFooter className="pt-3 border-t border-border/40">
                         <Button variant="outline" onClick={() => setAddMemberOpen(false)}>
                             {t("cancel")}
                         </Button>
                         <Button
                             onClick={handleAddMember}
-                            disabled={addingMember || !selectedUserId}
+                            disabled={addingMember || selectedUserIds.size === 0}
                         >
-                            {addingMember ? t("processing") : tg("addMember")}
+                            {addingMember ? t("processing") : `${tg("addMember")} (${selectedUserIds.size})`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

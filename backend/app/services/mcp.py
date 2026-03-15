@@ -252,7 +252,9 @@ class McpService:
         await db.refresh(tool)
 
         # Invalidate MCP cache (tools are part of server listing)
-        await CacheInvalidation(cache).clear_system_mcp_servers()
+        inv = CacheInvalidation(cache)
+        await inv.clear_system_mcp_servers()
+        await inv.clear_agent_tools_all()
         return tool
 
     # ── Tool Discovery ────────────────────────────────────────────────
@@ -373,7 +375,9 @@ class McpService:
                 synced_tools.append(tool_info)
 
         await db.commit()
-        await CacheInvalidation(cache).clear_system_mcp_servers()
+        inv = CacheInvalidation(cache)
+        await inv.clear_system_mcp_servers()
+        await inv.clear_agent_tools_all()
         logger.info(f"Synced {len(synced_tools)} tools to server {server_id}")
         return discovered
 

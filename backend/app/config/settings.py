@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     CACHE_PROVIDER_TTL: int = 7200      # 2 hours
     CACHE_BLACKLIST_TTL: int = 86400    # 24 hours
     CACHE_AGENT_MCP_TOOLSET_TTL: int = 3600  # 1 hour — runtime MCP toolset
+    CACHE_INDEX_TASK_TTL: int = 86400         # 24h — indexing task progress in Redis
+    CACHE_INDEX_LOCK_TTL: int = 3600          # 1h — dedup lock
     AUTH_CACHE_TTL: int = 300           # 5 minutes
     
     # ── Invite Settings ──────────────────────────────────────────────────

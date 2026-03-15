@@ -161,6 +161,7 @@ class AuthService:
                 "org_logo_url": get_public_url(org.logo_url, bucket=org.subdomain or org.slug),
                 "org_role": membership.org_role,
                 "is_active": membership.is_active,
+                "timezone": org.timezone or "UTC",
             })
 
         return {

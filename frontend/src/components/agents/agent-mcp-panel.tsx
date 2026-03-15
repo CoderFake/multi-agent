@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Plug, KeyRound, ChevronDown, ChevronRight, Save, AlertTriangle, Plus } from "lucide-react";
+import { usePermissions } from "@/hooks/use-permissions";
 import { updateMcpEnv } from "@/lib/api/agent-access";
 import { AttachMcpModal } from "./attach-mcp-modal";
 
@@ -37,6 +38,7 @@ function extractEnvKeys(config: Record<string, unknown> | null): string[] {
 
 export function AgentMcpPanel({ agentId, mcpServers, onMutate }: AgentMcpPanelProps) {
     const t = useTranslations("tenant");
+    const { hasPermission } = usePermissions();
     const [attachOpen, setAttachOpen] = useState(false);
 
     return (
@@ -51,15 +53,17 @@ export function AgentMcpPanel({ agentId, mcpServers, onMutate }: AgentMcpPanelPr
                             {t("mcpServersDesc")}
                         </CardDescription>
                     </div>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAttachOpen(true)}
-                        className="gap-1.5 shrink-0"
-                    >
-                        <Plus className="h-3.5 w-3.5" />
-                        {t("attachMcp")}
-                    </Button>
+                    {hasPermission("agent_mcp.assign") && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAttachOpen(true)}
+                            className="gap-1.5 shrink-0"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            {t("attachMcp")}
+                        </Button>
+                    )}
                 </div>
             </CardHeader>
             <CardContent>

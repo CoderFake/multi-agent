@@ -2,12 +2,29 @@
  * Tenant Agent Access Control API — agent-MCP, group-agent, group-tool.
  */
 import { api } from "@/lib/api-client";
-import type { Agent, AgentCreate, AgentUpdate, AgentMcpServer, GroupAgent, GroupToolAccess, AvailableMcpServer } from "@/types/models";
+import type { Agent, AgentCreate, AgentUpdate, AgentMcpServer, GroupAgent, GroupToolAccess, AvailableMcpServer, AgentTool, ProviderWithKeys, AgentModel } from "@/types/models";
 
 // ── Available MCP servers for the org ────────────────────────────────────
 
 export function fetchAvailableMcpServers() {
     return api.get<AvailableMcpServer[]>("/tenant/access/available-mcp-servers");
+}
+
+// ── Providers with active keys (for agent create/edit) ──────────────────
+
+export function fetchProvidersWithKeys() {
+    return api.get<ProviderWithKeys[]>("/tenant/providers/with-keys");
+}
+
+export function fetchProviderModels(providerId: string) {
+    return api.get<AgentModel[]>(`/tenant/providers/${providerId}/models`);
+}
+
+export function setAgentProvider(agentId: string, providerId: string, modelId: string) {
+    return api.put<{ agent_id: string; provider_id: string; model_id: string }>(
+        `/tenant/agents/${agentId}/provider`,
+        { provider_id: providerId, model_id: modelId },
+    );
 }
 
 // ── Agents CRUD ─────────────────────────────────────────────────────────
@@ -80,19 +97,23 @@ export function revokeAgentFromGroup(groupId: string, agentId: string) {
     return api.delete(`/tenant/access/groups/${groupId}/agents/${agentId}`);
 }
 
-// ── Group ↔ Tool Access ─────────────────────────────────────────────────
+// ── Agent tools listing ─────────────────────────────────────────────────
 
-export function fetchGroupToolAccess(groupId: string) {
-    return api.get<GroupToolAccess[]>(`/tenant/access/groups/${groupId}/tools`);
+export function fetchAgentTools(agentId: string) {
+    return api.get<AgentTool[]>(`/tenant/access/agents/${agentId}/tools`);
 }
 
-export function toggleToolAccess(groupId: string, toolId: string, isEnabled: boolean) {
-    return api.patch<GroupToolAccess>(`/tenant/access/groups/${groupId}/tools/${toolId}`, {
+export function fetchGroupToolAccess(groupId: string, agentId: string) {
+    return api.get<GroupToolAccess[]>(`/tenant/access/groups/${groupId}/agents/${agentId}/tools`);
+}
+
+export function toggleToolAccess(groupId: string, agentId: string, toolId: string, isEnabled: boolean) {
+    return api.patch<GroupToolAccess>(`/tenant/access/groups/${groupId}/agents/${agentId}/tools/${toolId}`, {
         tool_id: toolId,
         is_enabled: isEnabled,
     });
 }
 
-export function bulkToggleTools(groupId: string, entries: { tool_id: string; is_enabled: boolean }[]) {
-    return api.put<GroupToolAccess[]>(`/tenant/access/groups/${groupId}/tools`, { entries });
+export function bulkToggleTools(groupId: string, agentId: string, entries: { tool_id: string; is_enabled: boolean }[]) {
+    return api.put<GroupToolAccess[]>(`/tenant/access/groups/${groupId}/agents/${agentId}/tools`, { entries });
 }

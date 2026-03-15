@@ -23,6 +23,7 @@ interface DataTableProps<TData> {
   emptyTitle?: string;
   emptyDescription?: string;
   onRowClick?: (row: TData) => void;
+  scrollHeight?: string;
 }
 
 export function DataTable<TData>({
@@ -37,6 +38,7 @@ export function DataTable<TData>({
   emptyTitle,
   emptyDescription,
   onRowClick,
+  scrollHeight,
 }: DataTableProps<TData>) {
   const t = useTranslations("common");
 
@@ -66,7 +68,10 @@ export function DataTable<TData>({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border/50 bg-card">
+      <div
+        className="rounded-lg border border-border/50 bg-card"
+        style={scrollHeight ? { maxHeight: scrollHeight, overflowY: 'auto' } : undefined}
+      >
         <div className="relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -115,9 +120,8 @@ export function DataTable<TData>({
                 table.getRowModel().rows.map((row) => (
                   <tr
                     key={row.id}
-                    className={`border-b border-border/40 last:border-b-0 transition-colors hover:bg-muted/30${
-                      onRowClick ? " cursor-pointer" : ""
-                    }`}
+                    className={`border-b border-border/40 last:border-b-0 transition-colors hover:bg-muted/30${onRowClick ? " cursor-pointer" : ""
+                      }`}
                     onClick={() => onRowClick?.(row.original)}
                   >
                     {row.getVisibleCells().map((cell) => (

@@ -253,7 +253,7 @@ export default function OrganizationDetailPage() {
             </div>
 
             {/* Tabs */}
-            <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="mb-6 border-b border-border">
                 <div className="flex gap-4">
                     <button
                         onClick={() => setActiveTab("overview")}
@@ -361,7 +361,7 @@ export default function OrganizationDetailPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex justify-end gap-3 pt-4 border-t border-border">
                                     <Button
                                         variant="outline"
                                         onClick={() => router.push("/system/organizations")}
@@ -406,7 +406,7 @@ export default function OrganizationDetailPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="p-0">
-                                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div className="divide-y divide-border">
                                     {pendingInvites.map((invite) => (
                                         <div key={invite.id} className="flex items-center justify-between px-6 py-3">
                                             <div className="flex items-center gap-3">
@@ -467,8 +467,8 @@ export default function OrganizationDetailPage() {
                                 </div>
                             ) : (
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                        <thead className="bg-gray-50 dark:bg-gray-800/50">
+                                    <table className="min-w-full divide-y divide-border">
+                                        <thead className="bg-muted/50">
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                                                     {t("name")}
@@ -487,9 +487,9 @@ export default function OrganizationDetailPage() {
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tbody className="divide-y divide-border">
                                             {members.map((member) => (
-                                                <tr key={member.user_id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                <tr key={member.user_id} className="hover:bg-muted/50">
                                                     <td className="px-6 py-4 text-sm font-medium">
                                                         {member.user_full_name}
                                                     </td>
@@ -528,7 +528,7 @@ export default function OrganizationDetailPage() {
                                 <CardTitle className="text-base">{ts("inviteHistory")}</CardTitle>
                             </CardHeader>
                             <CardContent className="p-0">
-                                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                                <div className="divide-y divide-border">
                                     {otherInvites.map((invite) => (
                                         <div key={invite.id} className="flex items-center justify-between px-6 py-3">
                                             <div>
@@ -540,7 +540,7 @@ export default function OrganizationDetailPage() {
                                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${invite.status === "accepted"
                                                 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
                                                 : invite.status === "expired"
-                                                    ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                                    ? "bg-muted text-muted-foreground"
                                                     : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
                                                 }`}>
                                                 {invite.status}

@@ -11,7 +11,7 @@ interface McpServerSelectorProps {
   servers: SystemMcpServer[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onSaveConfig: () => void;
+  onSaveConfig?: () => void;
   onAssignOrgs?: () => void;
 }
 
@@ -45,10 +45,9 @@ export function McpServerSelector({
             className={`
               inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium
               transition-colors border cursor-pointer
-              ${
-                selectedId === server.id
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-card text-foreground border-border/50 hover:bg-muted/50"
+              ${selectedId === server.id
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-foreground border-border/50 hover:bg-muted/50"
               }
             `}
           >
@@ -68,12 +67,14 @@ export function McpServerSelector({
       </div>
 
       {/* Actions */}
-      {selectedId && (
+      {selectedId && (onSaveConfig || onAssignOrgs) && (
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={onSaveConfig} className="gap-1.5">
-            <Save className="h-3.5 w-3.5" />
-            {t("save")}
-          </Button>
+          {onSaveConfig && (
+            <Button variant="outline" size="sm" onClick={onSaveConfig} className="gap-1.5">
+              <Save className="h-3.5 w-3.5" />
+              {t("save")}
+            </Button>
+          )}
           {onAssignOrgs && (
             <Button
               variant="outline"

@@ -148,43 +148,268 @@ TOOLS: dict[str, list[dict]] = {
             "codename": "gitlab_list_projects",
             "display_name": "List Projects",
             "description": "List GitLab projects accessible to the user.",
-            "input_schema": {},
+            "input_schema": {"type": "object", "properties": {"search": {"type": "string"}, "owned": {"type": "boolean"}, "membership": {"type": "boolean"}}},
         },
         {
             "codename": "gitlab_list_issues",
             "display_name": "List Issues",
             "description": "List issues in a GitLab project.",
-            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}},
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "state": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "gitlab_create_issue",
+            "display_name": "Create Issue",
+            "description": "Create a new issue in a GitLab project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "title": {"type": "string"}, "description": {"type": "string"}}, "required": ["project_id", "title"]},
         },
         {
             "codename": "gitlab_list_merge_requests",
             "display_name": "List Merge Requests",
             "description": "List merge requests in a GitLab project.",
-            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}},
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "state": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "gitlab_list_pipelines",
+            "display_name": "List Pipelines",
+            "description": "List recent CI/CD pipelines for a GitLab project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
         },
     ],
     "mcp_redmine": [
-        {
-            "codename": "redmine_list_projects",
-            "display_name": "List Projects",
-            "description": "List Redmine projects accessible to the user.",
-            "input_schema": {},
-        },
+        # ── Issues ──
         {
             "codename": "redmine_list_issues",
             "display_name": "List Issues",
-            "description": "List issues in a Redmine project with filters.",
-            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}},
+            "description": "List Redmine issues with optional filters.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "status_id": {"type": "string"}, "assigned_to_id": {"type": "string"}, "tracker_id": {"type": "integer"}, "limit": {"type": "integer"}}},
         },
         {
-            "codename": "redmine_log_time",
+            "codename": "redmine_get_issue",
+            "display_name": "Get Issue",
+            "description": "Get detailed information about a specific Redmine issue including comments and history.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "include": {"type": "string"}}, "required": ["issue_id"]},
+        },
+        {
+            "codename": "create_issue",
+            "display_name": "Create Issue",
+            "description": "Create a new Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "subject": {"type": "string"}, "tracker_id": {"type": "integer"}, "priority_id": {"type": "integer"}}, "required": ["project_id", "subject"]},
+        },
+        {
+            "codename": "redmine_update_issue",
+            "display_name": "Update Issue",
+            "description": "Update fields of an existing Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "subject": {"type": "string"}, "status_id": {"type": "integer"}}, "required": ["issue_id"]},
+        },
+        {
+            "codename": "redmine_delete_issue",
+            "display_name": "Delete Issue",
+            "description": "Permanently delete a Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}}, "required": ["issue_id"]},
+        },
+        {
+            "codename": "redmine_add_watcher",
+            "display_name": "Add Watcher",
+            "description": "Add a watcher to a Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "user_id": {"type": "integer"}}, "required": ["issue_id", "user_id"]},
+        },
+        {
+            "codename": "redmine_remove_watcher",
+            "display_name": "Remove Watcher",
+            "description": "Remove a watcher from a Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "user_id": {"type": "integer"}}, "required": ["issue_id", "user_id"]},
+        },
+        {
+            "codename": "redmine_list_relations",
+            "display_name": "List Relations",
+            "description": "List all relations of a Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}}, "required": ["issue_id"]},
+        },
+        {
+            "codename": "redmine_create_relation",
+            "display_name": "Create Relation",
+            "description": "Create a relation between two Redmine issues.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "issue_to_id": {"type": "integer"}, "relation_type": {"type": "string"}}, "required": ["issue_id", "issue_to_id"]},
+        },
+        {
+            "codename": "redmine_delete_relation",
+            "display_name": "Delete Relation",
+            "description": "Delete an issue relation.",
+            "input_schema": {"type": "object", "properties": {"relation_id": {"type": "integer"}}, "required": ["relation_id"]},
+        },
+        {
+            "codename": "redmine_list_categories",
+            "display_name": "List Categories",
+            "description": "List issue categories of a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_create_category",
+            "display_name": "Create Category",
+            "description": "Create a new issue category in a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "name": {"type": "string"}}, "required": ["project_id", "name"]},
+        },
+        # ── Projects ──
+        {
+            "codename": "redmine_list_projects",
+            "display_name": "List Projects",
+            "description": "List all accessible Redmine projects.",
+            "input_schema": {"type": "object", "properties": {"limit": {"type": "integer"}, "include": {"type": "string"}}},
+        },
+        {
+            "codename": "redmine_get_project",
+            "display_name": "Get Project",
+            "description": "Get details about a specific Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_create_project",
+            "display_name": "Create Project",
+            "description": "Create a new Redmine project.",
+            "input_schema": {"type": "object", "properties": {"name": {"type": "string"}, "identifier": {"type": "string"}}, "required": ["name", "identifier"]},
+        },
+        {
+            "codename": "redmine_update_project",
+            "display_name": "Update Project",
+            "description": "Update a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "name": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_delete_project",
+            "display_name": "Delete Project",
+            "description": "Delete a Redmine project. This cannot be undone.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_archive_project",
+            "display_name": "Archive Project",
+            "description": "Archive or unarchive a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "archive": {"type": "boolean"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_list_members",
+            "display_name": "List Members",
+            "description": "List members of a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_list_versions",
+            "display_name": "List Versions",
+            "description": "List versions (milestones) of a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_create_version",
+            "display_name": "Create Version",
+            "description": "Create a new version (milestone) in a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "name": {"type": "string"}}, "required": ["project_id", "name"]},
+        },
+        # ── Time Entries ──
+        {
+            "codename": "redmine_list_time_entries",
+            "display_name": "List Time Entries",
+            "description": "List time entries logged in Redmine.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "issue_id": {"type": "integer"}, "user_id": {"type": "integer"}}},
+        },
+        {
+            "codename": "log_time",
             "display_name": "Log Time",
-            "description": "Log time spent on a Redmine issue.",
-            "input_schema": {
-                "type": "object",
-                "properties": {"issue_id": {"type": "string"}, "hours": {"type": "number"}},
-                "required": ["issue_id", "hours"],
-            },
+            "description": "Log hours spent on a Redmine issue.",
+            "input_schema": {"type": "object", "properties": {"issue_id": {"type": "integer"}, "hours": {"type": "number"}, "activity_id": {"type": "integer"}, "comments": {"type": "string"}}, "required": ["issue_id", "hours"]},
+        },
+        {
+            "codename": "redmine_update_time_entry",
+            "display_name": "Update Time Entry",
+            "description": "Update an existing time entry.",
+            "input_schema": {"type": "object", "properties": {"time_entry_id": {"type": "integer"}, "hours": {"type": "number"}}, "required": ["time_entry_id"]},
+        },
+        {
+            "codename": "redmine_delete_time_entry",
+            "display_name": "Delete Time Entry",
+            "description": "Delete a time entry.",
+            "input_schema": {"type": "object", "properties": {"time_entry_id": {"type": "integer"}}, "required": ["time_entry_id"]},
+        },
+        # ── Wiki ──
+        {
+            "codename": "redmine_list_wiki_pages",
+            "display_name": "List Wiki Pages",
+            "description": "List all wiki pages of a Redmine project.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}}, "required": ["project_id"]},
+        },
+        {
+            "codename": "redmine_get_wiki_page",
+            "display_name": "Get Wiki Page",
+            "description": "Get content of a specific wiki page.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "title": {"type": "string"}}, "required": ["project_id", "title"]},
+        },
+        {
+            "codename": "redmine_update_wiki_page",
+            "display_name": "Update Wiki Page",
+            "description": "Create or update a wiki page.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "title": {"type": "string"}, "text": {"type": "string"}}, "required": ["project_id", "title", "text"]},
+        },
+        {
+            "codename": "redmine_delete_wiki_page",
+            "display_name": "Delete Wiki Page",
+            "description": "Delete a wiki page and its history.",
+            "input_schema": {"type": "object", "properties": {"project_id": {"type": "string"}, "title": {"type": "string"}}, "required": ["project_id", "title"]},
+        },
+        # ── Enumerations & Lookup ──
+        {
+            "codename": "redmine_list_priorities",
+            "display_name": "List Priorities",
+            "description": "List all Redmine issue priority levels.",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_list_trackers",
+            "display_name": "List Trackers",
+            "description": "List all Redmine trackers (Bug, Feature, Support, Task).",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_list_statuses",
+            "display_name": "List Statuses",
+            "description": "List all Redmine issue statuses.",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_list_activities",
+            "display_name": "List Activities",
+            "description": "List all Redmine time entry activity types.",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_list_roles",
+            "display_name": "List Roles",
+            "description": "List all Redmine roles.",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_list_queries",
+            "display_name": "List Queries",
+            "description": "List all saved custom queries.",
+            "input_schema": {},
+        },
+        {
+            "codename": "redmine_my_account",
+            "display_name": "My Account",
+            "description": "Get current user's account info.",
+            "input_schema": {},
+        },
+        # ── Search ──
+        {
+            "codename": "redmine_search",
+            "display_name": "Search",
+            "description": "Search across Redmine for issues, projects, or wiki pages.",
+            "input_schema": {"type": "object", "properties": {"q": {"type": "string"}, "limit": {"type": "integer"}}, "required": ["q"]},
+        },
+        # ── Form ──
+        {
+            "codename": "request_user_input",
+            "display_name": "Request User Input",
+            "description": "Request form input from the user for creating or updating records.",
+            "input_schema": {"type": "object", "properties": {"tool_name": {"type": "string"}, "project_id": {"type": "string"}, "options": {"type": "object"}, "form_defaults": {"type": "object"}}, "required": ["tool_name"]},
         },
     ],
 }
@@ -196,8 +421,35 @@ AGENT_TOOLS: dict[str, list[str]] = {
     "team_knowledge_agent": ["search_knowledge", "list_knowledge_files"],
     "web_search": ["google_search"],
     "data_analyst_agent": ["query_data", "list_datasets", "describe_table", "create_chart"],
-    "gitlab": ["gitlab_list_projects", "gitlab_list_issues", "gitlab_list_merge_requests"],
-    "redmine": ["redmine_list_projects", "redmine_list_issues", "redmine_log_time"],
+    "gitlab": [
+        "gitlab_list_projects", "gitlab_list_issues", "gitlab_create_issue",
+        "gitlab_list_merge_requests", "gitlab_list_pipelines",
+    ],
+    "redmine": [
+        # Issues
+        "redmine_list_issues", "redmine_get_issue", "create_issue",
+        "redmine_update_issue", "redmine_delete_issue",
+        "redmine_add_watcher", "redmine_remove_watcher",
+        "redmine_list_relations", "redmine_create_relation", "redmine_delete_relation",
+        "redmine_list_categories", "redmine_create_category",
+        # Projects
+        "redmine_list_projects", "redmine_get_project",
+        "redmine_create_project", "redmine_update_project",
+        "redmine_delete_project", "redmine_archive_project",
+        "redmine_list_members", "redmine_list_versions", "redmine_create_version",
+        # Time entries
+        "redmine_list_time_entries", "log_time",
+        "redmine_update_time_entry", "redmine_delete_time_entry",
+        # Wiki
+        "redmine_list_wiki_pages", "redmine_get_wiki_page",
+        "redmine_update_wiki_page", "redmine_delete_wiki_page",
+        # Enumerations & lookup
+        "redmine_list_priorities", "redmine_list_trackers", "redmine_list_statuses",
+        "redmine_list_activities", "redmine_list_roles", "redmine_list_queries",
+        "redmine_my_account",
+        # Search & forms
+        "redmine_search", "request_user_input",
+    ],
 }
 
 

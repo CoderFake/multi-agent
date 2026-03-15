@@ -176,9 +176,11 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <FeedbackDialog />
-          </SidebarMenuItem>
+          {!pathname.startsWith("/system") && (
+            <SidebarMenuItem>
+              <FeedbackDialog />
+            </SidebarMenuItem>
+          )}
           <SidebarMenuItem>
             <OrgSwitcher />
           </SidebarMenuItem>

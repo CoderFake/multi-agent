@@ -147,7 +147,6 @@ class PermissionService:
             await redis.setex(cache_key, settings.CACHE_PERMISSION_TTL, json.dumps(list(permissions)))
             return permissions
 
-        # Resolve from DB for regular members
         permissions: set[str] = set()
 
         # User overrides (granted)

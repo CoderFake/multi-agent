@@ -3,7 +3,7 @@ CMS Agent Access Control models.
 Group → Agent, Agent → MCP, Group → Tool access.
 """
 import uuid
-from sqlalchemy import Column, Boolean, ForeignKey, DateTime, func
+from sqlalchemy import Column, Boolean, ForeignKey, DateTime, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.models.base import Base
@@ -93,13 +93,22 @@ class CmsGroupAgent(Base):
 
 
 class CmsGroupToolAccess(Base):
-    """M2M: Toggle tool access per group. No record = allowed (public default)."""
+    """M2M: Toggle tool access per group+agent. No record = allowed (public default)."""
     __tablename__ = "cms_group_tool_access"
+    __table_args__ = (
+        UniqueConstraint("group_id", "agent_id", "tool_id", "org_id", name="uq_group_agent_tool_org"),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     group_id = Column(
         UUID(as_uuid=True),
         ForeignKey("cms_group.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    agent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cms_agent.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -119,4 +128,4 @@ class CmsGroupToolAccess(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self) -> str:
-        return f"<CmsGroupToolAccess(group={self.group_id}, tool={self.tool_id}, enabled={self.is_enabled})>"
+        return f"<CmsGroupToolAccess(group={self.group_id}, agent={self.agent_id}, tool={self.tool_id}, enabled={self.is_enabled})>"

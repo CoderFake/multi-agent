@@ -37,6 +37,7 @@ from app.db_sync.tools import (
     AGENT_TOOLS,
 )
 from app.db_sync.superuser import sync_superuser
+from app.db_sync.settings import sync_settings, DEFAULT_SETTINGS
 
 __all__ = [
     # Permissions & groups
@@ -61,4 +62,7 @@ __all__ = [
     "AGENT_TOOLS",
     # Users
     "sync_superuser",
+    # Settings
+    "sync_settings",
+    "DEFAULT_SETTINGS",
 ]

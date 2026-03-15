@@ -84,6 +84,43 @@ async def upload_file(
         raise
 
 
+async def upload_file_bytes(
+    data: bytes,
+    path: str,
+    content_type: str = "application/octet-stream",
+    bucket: Optional[str] = None,
+) -> str:
+    """
+    Upload raw bytes to MinIO.
+
+    Args:
+        data: File content as bytes
+        path: Storage path inside bucket
+        content_type: MIME type
+        bucket: Bucket name (defaults to settings.MINIO_BUCKET)
+
+    Returns:
+        The storage path (for saving in DB).
+    """
+    bucket = bucket or settings.MINIO_BUCKET
+    client = _get_client()
+    _ensure_bucket(client, bucket)
+
+    try:
+        client.put_object(
+            bucket,
+            path,
+            io.BytesIO(data),
+            length=len(data),
+            content_type=content_type,
+        )
+        logger.info(f"Uploaded file: {bucket}/{path} ({len(data)} bytes)")
+        return path
+    except S3Error as e:
+        logger.error(f"Failed to upload {path}: {e}")
+        raise
+
+
 async def delete_file(
     path: str,
     bucket: Optional[str] = None,
@@ -124,7 +161,6 @@ def get_public_url(
 
     bucket = bucket or settings.MINIO_BUCKET
 
-    # Use the backend's own assets endpoint as proxy
     api_base = f"http://localhost:{settings.CMS_PORT}/api/v1"
     return f"{api_base}/assets/{bucket}/{storage_path}"
 

@@ -83,8 +83,8 @@ export function fetchGroupMembers(groupId: string) {
     return api.get<TenantUser[]>(`/tenant/groups/${groupId}/members`);
 }
 
-export function addGroupMember(groupId: string, userId: string) {
-    return api.post(`/tenant/groups/${groupId}/members`, { user_id: userId });
+export function addGroupMember(groupId: string, userIds: string[]) {
+    return api.post(`/tenant/groups/${groupId}/members`, { user_ids: userIds });
 }
 
 export function removeGroupMember(groupId: string, userId: string) {

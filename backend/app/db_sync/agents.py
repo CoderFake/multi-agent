@@ -55,7 +55,7 @@ SYSTEM_AGENTS = [
         ),
         "default_config": {
             "model": "gemini-2.5-pro",
-            "tools": ["execute_query", "create_visualization"],
+            "tools": ["query_data", "list_datasets", "describe_table", "create_chart"],
         },
     },
     {
